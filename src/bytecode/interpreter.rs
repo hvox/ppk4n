@@ -25,10 +25,16 @@ fn call_fn(program: &Mod, stack: &mut Vec<Value>, fn_id: usize) {
 	stack.extend(result);
 }
 
-fn eval_block(program: &Mod, stack: &mut Vec<Value>, locals: &mut Vec<Value>, block: &Vec<Op>) {
+fn eval_block(
+	program: &Mod,
+	stack: &mut Vec<Value>,
+	locals: &mut Vec<Value>,
+	block: &Vec<Op>,
+) -> bool {
 	for instruction in block {
 		match instruction {
 			Op::Drop => stack.truncate(stack.len() - 1),
+			Op::Return => return true,
 			Op::Call(i) => call_fn(program, stack, *i),
 			Op::Set(i) => locals[*i] = stack.pop().unwrap(),
 			Op::Tee(i) => locals[*i] = *stack.last().unwrap(),
@@ -36,10 +42,9 @@ fn eval_block(program: &Mod, stack: &mut Vec<Value>, locals: &mut Vec<Value>, bl
 			Op::Const(value, _) => stack.push(*value),
 			Op::IfElse(then, otherwise) => {
 				let condition: i32 = stack.pop().unwrap().into();
-				if condition != 0 {
-					eval_block(program, stack, locals, then);
-				} else {
-					eval_block(program, stack, locals, otherwise);
+				let block = if condition != 0 { then } else { otherwise };
+				if eval_block(program, stack, locals, block) {
+					return true;
 				}
 			}
 			Op::Binary(op, typ) => match typ {
@@ -56,6 +61,7 @@ fn eval_block(program: &Mod, stack: &mut Vec<Value>, locals: &mut Vec<Value>, bl
 			},
 		}
 	}
+	return false;
 }
 
 impl<'a> State<'a> {

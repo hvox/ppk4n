@@ -26,6 +26,7 @@ pub struct Fn {
 
 pub enum Op {
 	Drop,
+	Return,
 	Call(usize),
 	Set(usize),
 	Get(usize),
