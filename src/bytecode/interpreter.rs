@@ -19,15 +19,26 @@ fn call_fn(state: &mut State, fn_id: usize) {
 	for i in (0..f.params.len()).rev() {
 		locals[i] = state.stack.pop().unwrap();
 	}
-	let mut pc = 0;
-	while pc < f.body.len() {
-		match &f.body[pc] {
-			Op::Drop => state.stack.truncate(1),
+	eval_block(state, &mut locals, &f.body);
+}
+
+fn eval_block(state: &mut State, locals: &mut Vec<Value>, block: &Vec<Op>) {
+	for instruction in block {
+		match instruction {
+			Op::Drop => state.stack.truncate(state.stack.len() - 1),
 			Op::Call(i) => call_fn(state, *i),
 			Op::Set(i) => locals[*i] = state.stack.pop().unwrap(),
 			Op::Tee(i) => locals[*i] = *state.stack.last().unwrap(),
 			Op::Get(i) => state.stack.push(locals[*i]),
 			Op::Const(value, _) => state.stack.push(*value),
+			Op::IfElse(then, otherwise) => {
+				let condition: i32 = state.stack.pop().unwrap().into();
+				if condition != 0 {
+					eval_block(state, locals, then);
+				} else {
+					eval_block(state, locals, otherwise);
+				}
+			}
 			Op::Binary(op, typ) => match typ {
 				Type::I32 => {
 					let y: i32 = state.stack.pop().unwrap().into();
@@ -41,7 +52,6 @@ fn call_fn(state: &mut State, fn_id: usize) {
 				}
 			},
 		}
-		pc += 1;
 	}
 }
 

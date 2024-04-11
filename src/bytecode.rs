@@ -31,6 +31,7 @@ pub enum Op {
 	Get(usize),
 	Tee(usize),
 	Const(Value, Type),
+	IfElse(Vec<Op>, Vec<Op>),
 	Binary(BinaryOp, Type),
 }
 
