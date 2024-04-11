@@ -4,7 +4,7 @@ use std::collections::HashMap;
 pub mod interpreter;
 pub mod value;
 
-pub struct Mod {
+pub struct Program {
 	pub imports: IndexMap<String, ImportedFn>,
 	pub functions: IndexMap<String, Fn>,
 	pub exports: HashMap<String, usize>,

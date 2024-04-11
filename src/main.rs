@@ -11,7 +11,7 @@ fn main() {
 	}
 	use BinaryOp::*;
 	use Type::*;
-	let program = Mod {
+	let program = Program {
 		imports: IndexMap::new(),
 		exports: HashMap::from([("main".to_string(), 0)]),
 		functions: IndexMap::from([(

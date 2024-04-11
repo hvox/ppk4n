@@ -3,17 +3,17 @@ use crate::bytecode::*;
 
 struct State<'a> {
 	stack: Vec<Value>,
-	code: &'a Mod,
+	code: &'a Program,
 }
 
-fn run(program: &Mod) -> Vec<Value> {
+fn run(program: &Program) -> Vec<Value> {
 	let main_id = program.exports["main"];
 	let mut state = State::new(program);
 	call_fn(program, &mut state.stack, main_id);
 	state.stack
 }
 
-fn call_fn(program: &Mod, stack: &mut Vec<Value>, fn_id: usize) {
+fn call_fn(program: &Program, stack: &mut Vec<Value>, fn_id: usize) {
 	let f = &program.functions[fn_id];
 	let mut locals = vec![Value::NONE; f.params.len() + f.locals.len()];
 	for i in (0..f.params.len()).rev() {
@@ -26,7 +26,7 @@ fn call_fn(program: &Mod, stack: &mut Vec<Value>, fn_id: usize) {
 }
 
 fn eval_block(
-	program: &Mod,
+	program: &Program,
 	stack: &mut Vec<Value>,
 	locals: &mut Vec<Value>,
 	block: &Vec<Op>,
@@ -65,13 +65,13 @@ fn eval_block(
 }
 
 impl<'a> State<'a> {
-	fn new(program: &'a Mod) -> State<'a> {
+	fn new(program: &'a Program) -> State<'a> {
 		State { stack: vec![], code: program }
 	}
 }
 
-impl Mod {
-	pub fn run(self: &Mod) -> Vec<Value> {
+impl Program {
+	pub fn run(self: &Program) -> Vec<Value> {
 		run(self)
 	}
 }
