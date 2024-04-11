@@ -22,6 +22,7 @@ fn call_fn(state: &mut State, fn_id: usize) {
 	let mut pc = 0;
 	while pc < f.body.len() {
 		match &f.body[pc] {
+			Op::Call(i) => call_fn(state, *i),
 			Op::Set(i) => locals[*i] = state.stack.pop().unwrap(),
 			Op::Tee(i) => locals[*i] = *state.stack.last().unwrap(),
 			Op::Get(i) => state.stack.push(locals[*i]),
