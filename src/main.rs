@@ -9,7 +9,8 @@ fn main() {
 	if args.len() != 2 {
 		panic!("Are you stupid?");
 	}
-	use Op::*;
+	use BinaryOp::*;
+	use Type::*;
 	let program = Mod {
 		imports: IndexMap::new(),
 		exports: HashMap::from([("main".to_string(), 0)]),
@@ -19,7 +20,7 @@ fn main() {
 				params: vec![],
 				result: vec![],
 				locals: vec![],
-				body: vec![Const(123), Const(321), Add],
+				body: vec![Op::i32(123), Op::i32(321), Op::Binary(Add, I32)],
 			},
 		)]),
 	};

@@ -1,6 +1,8 @@
+use self::value::Value;
 use indexmap::IndexMap;
 use std::collections::HashMap;
 pub mod interpreter;
+pub mod value;
 
 pub struct Mod {
 	pub imports: IndexMap<String, ImportedFn>,
@@ -26,10 +28,20 @@ pub enum Op {
 	Set(usize),
 	Get(usize),
 	Tee(usize),
-	Const(i32),
+	Const(Value, Type),
+	Binary(BinaryOp, Type),
+}
+
+pub enum BinaryOp {
 	Add,
 	Sub,
-	Mult,
+	Mul,
+}
+
+impl Op {
+	pub fn i32(value: i32) -> Op {
+		Op::Const(value.into(), Type::I32)
+	}
 }
 
 pub struct Var {
@@ -39,18 +51,4 @@ pub struct Var {
 
 pub enum Type {
 	I32,
-}
-
-#[derive(Clone, Debug, Copy)]
-pub enum Value {
-	None,
-	I32(i32),
-}
-
-impl Value {
-	fn new(typ: &Type) -> Value {
-		match typ {
-			Type::I32 => Value::I32(0),
-		}
-	}
 }
