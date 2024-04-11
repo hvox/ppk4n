@@ -16,7 +16,7 @@ fn run(program: &Mod) -> Vec<Value> {
 fn call_fn(state: &mut State, fn_id: usize) {
 	let f = &state.code.functions[fn_id];
 	let mut locals = vec![Value::NONE; f.params.len() + f.locals.len()];
-	for i in (0..locals.len()).rev() {
+	for i in (0..f.params.len()).rev() {
 		locals[i] = state.stack.pop().unwrap();
 	}
 	let mut pc = 0;
