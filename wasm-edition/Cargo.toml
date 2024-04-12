@@ -1,6 +1,5 @@
-workspace = { members = ["wasm-edition"] }
 [package]
-name = "ppk4n"
+name = "ppk4n-wasm-edition"
 version = "0.1.0"
 edition = "2021"
 
