@@ -19,23 +19,21 @@ fn call_fn(program: &Program, stack: &mut Vec<Value>, fn_id: usize) {
 	for i in (0..f.params.len()).rev() {
 		locals[i] = stack.pop().unwrap();
 	}
-	let mut fn_stack = vec![];
-	eval_block(program, &mut fn_stack, &mut locals, &f.body);
-	let result = fn_stack.split_off(fn_stack.len() - f.result.len());
-	stack.extend(result);
+	let mut result = match eval_block(program, &mut locals, &f.body) {
+		EvalResult::Return(stack) => stack,
+		EvalResult::End(stack) => stack,
+	};
+	stack.extend(result.split_off(result.len() - f.result.len()));
 }
 
-fn eval_block(
-	program: &Program,
-	stack: &mut Vec<Value>,
-	locals: &mut Vec<Value>,
-	block: &Vec<Op>,
-) -> bool {
+fn eval_block(program: &Program, locals: &mut Vec<Value>, block: &Vec<Op>) -> EvalResult {
+	let mut stack = vec![];
 	for instruction in block {
+		#[cfg(debug_assertions)] println!("{:?} \x1b[92m{:?}\x1b[0m", stack, instruction);
 		match instruction {
 			Op::Drop => stack.truncate(stack.len() - 1),
-			Op::Return => return true,
-			Op::Call(i) => call_fn(program, stack, *i),
+			Op::Return => return EvalResult::Return(stack),
+			Op::Call(i) => call_fn(program, &mut stack, *i),
 			Op::Set(i) => locals[*i] = stack.pop().unwrap(),
 			Op::Tee(i) => locals[*i] = *stack.last().unwrap(),
 			Op::Get(i) => stack.push(locals[*i]),
@@ -43,8 +41,8 @@ fn eval_block(
 			Op::IfElse(then, otherwise) => {
 				let condition: i32 = stack.pop().unwrap().into();
 				let block = if condition != 0 { then } else { otherwise };
-				if eval_block(program, stack, locals, block) {
-					return true;
+				if let EvalResult::Return(result) = eval_block(program, locals, block) {
+					return EvalResult::Return(result);
 				}
 			}
 			Op::Binary(op, typ) => match typ {
@@ -61,7 +59,12 @@ fn eval_block(
 			},
 		}
 	}
-	return false;
+	return EvalResult::End(stack);
+}
+
+enum EvalResult {
+	Return(Vec<Value>),
+	End(Vec<Value>),
 }
 
 impl<'a> State<'a> {
