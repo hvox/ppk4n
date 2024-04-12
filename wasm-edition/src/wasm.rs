@@ -141,21 +141,8 @@ enum SectionId {
 
 impl SectionId {
 	fn from(byte: u8) -> Result<Self, &'static str> {
-		match byte {
-			1 => Ok(Self::Type),
-			2 => Err("section: Import section is not currently supported"),
-			3 => Ok(Self::Function),
-			4 => Err("section: Table section is not currently supported"),
-			5 => Err("section: Memory section is not currently supported"),
-			6 => Err("section: Global section is not currently supported"),
-			7 => Ok(Self::Export),
-			8 => Err("section: Start section is not currently supported"),
-			9 => Err("section: Element section is not currently supported"),
-			10 => Ok(Self::Code),
-			11 => Err("section: Data section is not currently supported"),
-			12 => Err("section: DataCount section is not currently supported"),
-			_ => Err("section id"),
-		}
+		check!("section id", byte <= 12);
+		Ok(unsafe { std::mem::transmute(byte) })
 	}
 }
 
@@ -172,13 +159,13 @@ impl FnType {
 		let params_len = data[i + 1] as usize;
 		let mut params = vec![];
 		for j in 0..params_len {
-			params[j] = Type::from(data[i + 1 + j])?;
+			params.push(Type::from(data[i + 2 + j])?);
 		}
-		let i = i + params_len;
+		let i = i + 1 + params_len;
 		let results_len = data[i + 1] as usize;
 		let mut results = vec![];
 		for j in 0..results_len {
-			results[j] = Type::from(data[i + 1 + j])?;
+			results.push(Type::from(data[i + 2 + j])?);
 		}
 		*offset = i + results_len + 2;
 		Ok(FnType { params, results })
@@ -188,13 +175,13 @@ impl FnType {
 #[repr(u8)]
 #[derive(Debug)]
 enum Type {
-	I32 = 127,
+	I32 = 0x7f,
 }
 
 impl Type {
 	fn from(byte: u8) -> Result<Self, &'static str> {
 		match byte {
-			127 => Ok(Self::I32),
+			0x7f => Ok(Self::I32),
 			_ => Err("type id"),
 		}
 	}
