@@ -1,3 +1,4 @@
+use indexmap::IndexMap;
 pub struct Wasm {}
 
 const WASM_BINARY_MAGIC: [u8; 4] = *b"\0asm";
@@ -20,6 +21,7 @@ impl Wasm {
 		let mut i = 8;
 		let mut types = vec![];
 		let mut functions = vec![];
+		let mut exports = IndexMap::<String, usize>::new();
 		while i + 3 <= data.len() {
 			let section = SectionId::from(data[i])?;
 			println!("Section {:?}", section);
@@ -42,6 +44,19 @@ impl Wasm {
 						println!("\t{:?}", types[f]);
 						functions.push(data[j] as usize);
 						j += 1;
+					}
+				}
+				SectionId::Export => {
+					let mut j = i + 3;
+					for _ in 0..data[i + 2] {
+						let str_len = data[j] as usize;
+						let s = String::from_utf8(data[j + 1..j + 1 + str_len].to_vec());
+						check!("function name", s.is_ok());
+						let kind = data[j + str_len + 2];
+						check!("function kind", kind == 0);
+						let f = data[j + str_len + 3] as usize;
+						j = j + 4 + str_len;
+						exports.insert(s.unwrap(), f);
 					}
 				}
 				_ => println!("\tCURRENTLY NOT IMPLEMENTED"),
