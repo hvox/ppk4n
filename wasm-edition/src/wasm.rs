@@ -1,15 +1,24 @@
 use indexmap::IndexMap;
-pub struct Wasm {}
-
-const WASM_BINARY_MAGIC: [u8; 4] = *b"\0asm";
-const WASM_BINARY_VERSION: [u8; 4] = [1, 0, 0, 0];
-
 macro_rules! check {
 	($err:expr, $cond:expr) => {{
 		if !$cond {
 			return Err($err);
 		}
 	}};
+	($err:expr) => {{
+		return Err($err);
+	}};
+}
+
+const WASM_BINARY_MAGIC: [u8; 4] = *b"\0asm";
+const WASM_BINARY_VERSION: [u8; 4] = [1, 0, 0, 0];
+
+pub struct Wasm {}
+
+pub enum Op {
+	I32Const(i32),
+	I32Add,
+	End,
 }
 
 // TODO: support indexes bigger than 128 using LEB128
@@ -23,6 +32,7 @@ impl Wasm {
 		let mut i = 8;
 		let mut types = vec![];
 		let mut functions = vec![];
+		let mut bodies = vec![];
 		let mut exports = IndexMap::<String, usize>::new();
 		while i + 3 <= data.len() {
 			let section = SectionId::from(data[i])?;
@@ -63,7 +73,44 @@ impl Wasm {
 						exports.insert(s, f);
 					}
 				}
-				SectionId::Code => {}
+				SectionId::Code => {
+					let mut j = i + 3;
+					for _ in 0..data[i + 2] {
+						let body_size = data[j] as usize;
+						let locals_len = data[j + 1] as usize;
+						assert!(locals_len == 0);
+						let locals: Vec<Type> = vec![];
+						let mut i = j + 2 + locals_len;
+						let mut body = vec![];
+						use Op::*;
+						print!("\t");
+						while i < j + 1 + body_size {
+							print!("{:02X} ", data[i]);
+							body.push(match data[i] {
+								0x41 => {
+									let value = data[i + 1] as i32;
+									i += 2;
+									I32Const(value)
+								}
+								0x6a => {
+									i += 1;
+									I32Add
+								}
+								0x0b => {
+									i += 1;
+									End
+								}
+								_ => {
+									println!();
+									check!("opcode")
+								}
+							});
+						}
+						println!("");
+						bodies.push((locals, body));
+						j += 1 + body_size;
+					}
+				}
 			}
 			i += 2 + size;
 		}
