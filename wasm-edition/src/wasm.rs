@@ -52,14 +52,16 @@ impl Wasm {
 						let str_len = data[j] as usize;
 						let s = String::from_utf8(data[j + 1..j + 1 + str_len].to_vec());
 						check!("function name", s.is_ok());
-						let kind = data[j + str_len + 2];
+						let s = s.unwrap();
+						let kind = data[j + str_len + 1];
 						check!("function kind", kind == 0);
-						let f = data[j + str_len + 3] as usize;
+						let f = data[j + str_len + 2] as usize;
 						j = j + 4 + str_len;
-						exports.insert(s.unwrap(), f);
+						println!("\tf#{} as {}", f, s);
+						exports.insert(s, f);
 					}
 				}
-				_ => println!("\tCURRENTLY NOT IMPLEMENTED"),
+				SectionId::Code => {}
 			}
 			i += 2 + size;
 		}
