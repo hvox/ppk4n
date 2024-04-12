@@ -12,7 +12,9 @@ macro_rules! check {
 	}};
 }
 
+// TODO: support indexes bigger than 128 using LEB128
 impl Wasm {
+	// TODO: use byte stream / iterator instead of slice
 	pub fn from(data: &[u8]) -> Result<Self, &str> {
 		let wasm = Wasm {};
 		check!("file size", data.len() >= 40);
