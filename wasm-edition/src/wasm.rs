@@ -1,3 +1,4 @@
+// https://webassembly.github.io/spec/core/binary/modules.html
 use indexmap::IndexMap;
 macro_rules! check {
 	($err:expr, $cond:expr) => {{
