@@ -19,6 +19,7 @@ impl Wasm {
 		check!("WASM version", data[4..8] == WASM_BINARY_VERSION);
 		let mut i = 8;
 		let mut types = vec![];
+		let mut functions = vec![];
 		while i + 3 <= data.len() {
 			let section = SectionId::from(data[i])?;
 			println!("Section {:?}", section);
@@ -32,6 +33,15 @@ impl Wasm {
 						let typ = FnType::from(data, &mut j)?;
 						println!("\t{:?}", typ);
 						types.push(typ);
+					}
+				}
+				SectionId::Function => {
+					let mut j = i + 3;
+					for _ in 0..data[i + 2] {
+						let f = data[j] as usize;
+						println!("\t{:?}", types[f]);
+						functions.push(data[j] as usize);
+						j += 1;
 					}
 				}
 				_ => println!("\tCURRENTLY NOT IMPLEMENTED"),
