@@ -111,6 +111,7 @@ impl Wasm {
 						j += 1 + body_size;
 					}
 				}
+				_ => return Err("section: currently unsupported"),
 			}
 			i += 2 + size;
 		}
@@ -123,19 +124,36 @@ impl Wasm {
 #[repr(u8)]
 #[derive(Debug)]
 enum SectionId {
+	Custom = 0,
 	Type = 1,
+	Import = 2,
 	Function = 3,
+	Table = 4,
+	Memory = 5,
+	Global = 6,
 	Export = 7,
+	Start = 8,
+	Element = 9,
 	Code = 10,
+	Data = 11,
+	DataCount = 12,
 }
 
 impl SectionId {
 	fn from(byte: u8) -> Result<Self, &'static str> {
 		match byte {
 			1 => Ok(Self::Type),
+			2 => Err("section: Import section is not currently supported"),
 			3 => Ok(Self::Function),
+			4 => Err("section: Table section is not currently supported"),
+			5 => Err("section: Memory section is not currently supported"),
+			6 => Err("section: Global section is not currently supported"),
 			7 => Ok(Self::Export),
+			8 => Err("section: Start section is not currently supported"),
+			9 => Err("section: Element section is not currently supported"),
 			10 => Ok(Self::Code),
+			11 => Err("section: Data section is not currently supported"),
+			12 => Err("section: DataCount section is not currently supported"),
 			_ => Err("section id"),
 		}
 	}
