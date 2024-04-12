@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 indexmap = "2.2.6"
+leb128 = "0.2.5"
 rustpython-parser = "0.3.1"
 
 [profile.release]
