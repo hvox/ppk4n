@@ -10,6 +10,8 @@ pub trait Reader: std::io::Read {
 	fn i64(&mut self) -> i64;
 	fn u32(&mut self) -> u32;
 	fn u64(&mut self) -> u64;
+	fn f32(&mut self) -> f32;
+	fn f64(&mut self) -> f64;
 	fn str(&mut self) -> String;
 	fn size(&mut self) -> usize;
 	fn skip(&mut self, n: usize);
@@ -43,6 +45,14 @@ impl<R: std::io::Read> Reader for R {
 
 	fn u64(&mut self) -> u64 {
 		read::unsigned(self).unwrap()
+	}
+
+	fn f32(&mut self) -> f32 {
+		f32::from_le_bytes(self.u8s())
+	}
+
+	fn f64(&mut self) -> f64 {
+		f64::from_le_bytes(self.u8s())
 	}
 
 	fn str(&mut self) -> String {
