@@ -3,11 +3,26 @@ mod errors;
 mod instr;
 mod macros;
 mod valtype;
+use instr::Instr;
 use valtype::Type;
 
-use instr::Instr;
+pub struct Wasm {
+	pub imports: Vec<(FnType, String, String)>,
+	pub functions: Vec<(FnType, Vec<Type>, Vec<Instr>)>,
+	pub init_ptr: Option<usize>,
+}
 
-pub struct Wasm {}
+#[derive(Clone)]
+pub struct FnType {
+	pub params: Vec<Type>,
+	pub resuls: Vec<Type>,
+}
+
+impl FnType {
+	pub fn from(tuple: (Vec<Type>, Vec<Type>)) -> Self {
+		Self { params: tuple.0, resuls: tuple.1 }
+	}
+}
 
 impl Wasm {
 	pub fn read<R: binary::Reader>(mut reader: R) -> Result<Self, errors::Error> {
@@ -52,9 +67,13 @@ impl Wasm {
 				_ => return Err(UnsupportedSection(section_id)),
 			}
 		}
-		for (t, f) in code {
-			println!("{:?} -> {:?}", t, f);
-		}
-		Ok(Wasm {})
+		let types: Vec<FnType> = types.into_iter().map(FnType::from).collect();
+		check!(Corrupted, functions.len() == code.len());
+		check!(Corrupted, imports.iter().all(|(_, _, t)| *t < types.len()));
+		check!(Corrupted, functions.iter().all(|&t| t < types.len()));
+		check!(Corrupted, start.is_none() || start.unwrap() < types.len());
+		let imports = imports.into_iter().map(|(m, n, t)| (types[t].clone(), m, n)).collect();
+		let fs = functions.into_iter().zip(code).map(|(t, b)| (types[t].clone(), b.0, b.1));
+		Ok(Wasm { imports, functions: fs.collect(), init_ptr: start })
 	}
 }
