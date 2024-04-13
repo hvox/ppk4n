@@ -1,7 +1,76 @@
 use leb128::read; // TODO: use my own errorless implementation without panics
 
-fn f(x: u32) -> u32 {
-	5
+pub struct BinaryReader {
+	bytes: Box<dyn std::io::Read>,
+	pub last_byte: u8,
+}
+
+impl BinaryReader {
+	// pub fn from<R: std::io::Read>(reader: R) -> Self {
+	// 	BinaryReader { bytes: Box::from(reader), last_byte: 0 }
+	// }
+
+	pub fn u8(&mut self) -> u8 {
+		self.next().unwrap_or(0)
+	}
+
+	pub fn i32(&mut self) -> i32 {
+		read::signed(&mut self.bytes).unwrap() as i32
+	}
+
+	pub fn i64(&mut self) -> i64 {
+		read::signed(&mut self.bytes).unwrap()
+	}
+
+	pub fn u32(&mut self) -> u32 {
+		read::unsigned(&mut self.bytes).unwrap() as u32
+	}
+
+	pub fn u64(&mut self) -> u64 {
+		read::unsigned(&mut self.bytes).unwrap()
+	}
+
+	pub fn str(&mut self) -> String {
+		String::from_utf8(self.vec(|r| r.u8())).unwrap()
+	}
+
+	pub fn size(&mut self) -> usize {
+		self.u32() as usize
+	}
+
+	pub fn skip(&mut self, n: usize) {
+		for _ in 0..n {
+			self.next();
+		}
+	}
+
+	pub fn next(&mut self) -> Option<u8> {
+		let mut buffer = [0u8; 1];
+		self.bytes.read_exact(&mut buffer).ok()?;
+		self.last_byte = buffer[0];
+		Some(self.last_byte)
+	}
+
+	pub fn u8s<const N: usize>(&mut self) -> [u8; N] {
+		let mut buffer = [0u8; N];
+		self.bytes.read_exact(&mut buffer).unwrap();
+		buffer
+	}
+
+	pub fn check(&mut self, expected_value: u8) -> &mut Self {
+		if self.next() != Some(expected_value) {
+			todo!();
+		}
+		self
+	}
+
+	pub fn vec<T, F: Fn(&mut Self) -> T>(&mut self, f: F) -> Vec<T> {
+		(0..self.size()).map(|_| f(self)).collect()
+	}
+
+	pub fn vec2<T, F: Fn(&mut Self) -> T>(&mut self, f: F) -> (Vec<T>, Vec<T>) {
+		((0..self.size()).map(|_| f(self)).collect(), (0..self.size()).map(|_| f(self)).collect())
+	}
 }
 
 pub trait Reader: std::io::Read {
