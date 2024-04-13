@@ -3,6 +3,7 @@ use super::Type;
 // https://webassembly.github.io/spec/core/binary/instructions
 #[repr(u8)]
 #[allow(non_camel_case_types)]
+#[derive(Debug)]
 pub enum Instr {
 	// Control Instructions
 	Unreachable = 0x00,
@@ -10,6 +11,8 @@ pub enum Instr {
 	Block(Vec<Type>, Vec<Instr>) = 0x02,
 	Loop(Vec<Type>, Vec<Instr>) = 0x03,
 	IfElse(Vec<Type>, Vec<Instr>, Vec<Instr>) = 0x04,
+	Else = 0x05,
+	End = 0x0B,
 	Br(u32) = 0x0C,
 	BrIf(u32) = 0x0D,
 	BrTable(Vec<u32>, u32) = 0x0E,
@@ -190,24 +193,190 @@ impl Instr {
 		reader: &mut Reader,
 		table: &Vec<(Vec<Type>, Vec<Type>)>,
 	) -> Option<Vec<Self>> {
-		let mut block = vec![];
-		while let Some(instr) = reader.next() {
-			use Instr::*;
-			block.push(match instr {
-				_ if instr == Unreachable.as_u8() => Unreachable,
-				_ if instr == Nop.as_u8() => Nop,
-				_ if instr == Block(vec![], vec![]).as_u8() => {
-					Block(Type::from_table(table, reader.i64())?, Instr::read_from(reader, table)?)
-				}
-				_ if instr == Loop(vec![], vec![]).as_u8() => {
-					Loop(Type::from_table(table, reader.i64())?, Instr::read_from(reader, table)?)
-				}
-				_ if instr == IfElse(vec![], vec![], vec![]).as_u8() => {
-					Loop(Type::from_table(table, reader.i64())?, Instr::read_from(reader, table)?)
-				}
-				_ => panic!("Unsupported instruction: 0x{:02X}", instr),
-			});
-		}
-		vec![].into()
+		Some(read_block(reader, table)?.0)
 	}
+}
+
+fn read_block<Reader: super::binary::Reader>(
+	reader: &mut Reader,
+	table: &Vec<(Vec<Type>, Vec<Type>)>,
+) -> Option<(Vec<Instr>, u8)> {
+	let mut block = vec![];
+	while let Some(instr) = reader.next() {
+		use Instr::*;
+		block.push(match instr {
+			x if x == Unreachable.as_u8() => Unreachable,
+			x if x == Nop.as_u8() => Nop,
+			x if x == Block(vec![], vec![]).as_u8() => {
+				Block(Type::from_table(table, reader.i64())?, Instr::read_from(reader, table)?)
+			}
+			x if x == Loop(vec![], vec![]).as_u8() => {
+				Loop(Type::from_table(table, reader.i64())?, Instr::read_from(reader, table)?)
+			}
+			x if x == IfElse(vec![], vec![], vec![]).as_u8() => {
+				let typ = Type::from_table(table, reader.i64())?;
+				let (then, end) = read_block(reader, table)?;
+				let els = if end == Else.as_u8() { read_block(reader, table)?.0 } else { vec![] };
+				IfElse(typ, then, els)
+			}
+			x if x == Else.as_u8() => return Some((block, instr)),
+			x if x == End.as_u8() => return Some((block, instr)),
+			x if x == Br(0).as_u8() => Br(reader.u32()),
+			x if x == BrIf(0).as_u8() => BrIf(reader.u32()),
+			x if x == BrTable(vec![], 0).as_u8() => BrTable(reader.vec(|r| r.u32()), reader.u32()),
+			x if x == Return.as_u8() => Return,
+			x if x == Call(0).as_u8() => Call(reader.u32()),
+			x if x == CallIndirrect(0).as_u8() => CallIndirrect(reader.u32()),
+			x if x == Null(Type::None).as_u8() => Null(Type::from(reader.u8())),
+			x if x == IsNull.as_u8() => IsNull,
+			x if x == Func(0).as_u8() => Func(reader.u32()),
+			x if x == Drop.as_u8() => Drop,
+			x if x == Select.as_u8() => Select,
+			x if x == SelectVec(vec![]).as_u8() => SelectVec(reader.vec(|r| Type::from(r.u8()))),
+			x if x == LocalGet(0).as_u8() => LocalGet(reader.u32()),
+			x if x == LocalSet(0).as_u8() => LocalSet(reader.u32()),
+			x if x == LocalTee(0).as_u8() => LocalTee(reader.u32()),
+			x if x == GlobalGet(0).as_u8() => GlobalGet(reader.u32()),
+			x if x == GlobalSet(0).as_u8() => GlobalSet(reader.u32()),
+			x if x == ConstI32(0).as_u8() => ConstI32(reader.i32()),
+			x if x == ConstI64(0).as_u8() => ConstI64(reader.i64()),
+			x if x == ConstF32(0.).as_u8() => ConstF32(reader.f32()),
+			x if x == ConstF64(0.).as_u8() => ConstF64(reader.f64()),
+			x if x == i32_eqz.as_u8() => i32_eqz,
+			x if x == i32_eq.as_u8() => i32_eq,
+			x if x == i32_ne.as_u8() => i32_ne,
+			x if x == i32_lt_s.as_u8() => i32_lt_s,
+			x if x == i32_lt_u.as_u8() => i32_lt_u,
+			x if x == i32_gt_s.as_u8() => i32_gt_s,
+			x if x == i32_gt_u.as_u8() => i32_gt_u,
+			x if x == i32_le_s.as_u8() => i32_le_s,
+			x if x == i32_le_u.as_u8() => i32_le_u,
+			x if x == i32_ge_s.as_u8() => i32_ge_s,
+			x if x == i32_ge_u.as_u8() => i32_ge_u,
+			x if x == i64_eqz.as_u8() => i64_eqz,
+			x if x == i64_eq.as_u8() => i64_eq,
+			x if x == i64_ne.as_u8() => i64_ne,
+			x if x == i64_lt_s.as_u8() => i64_lt_s,
+			x if x == i64_lt_u.as_u8() => i64_lt_u,
+			x if x == i64_gt_s.as_u8() => i64_gt_s,
+			x if x == i64_gt_u.as_u8() => i64_gt_u,
+			x if x == i64_le_s.as_u8() => i64_le_s,
+			x if x == i64_le_u.as_u8() => i64_le_u,
+			x if x == i64_ge_s.as_u8() => i64_ge_s,
+			x if x == i64_ge_u.as_u8() => i64_ge_u,
+			x if x == f32_eq.as_u8() => f32_eq,
+			x if x == f32_ne.as_u8() => f32_ne,
+			x if x == f32_lt.as_u8() => f32_lt,
+			x if x == f32_gt.as_u8() => f32_gt,
+			x if x == f32_le.as_u8() => f32_le,
+			x if x == f32_ge.as_u8() => f32_ge,
+			x if x == f64_eq.as_u8() => f64_eq,
+			x if x == f64_ne.as_u8() => f64_ne,
+			x if x == f64_lt.as_u8() => f64_lt,
+			x if x == f64_gt.as_u8() => f64_gt,
+			x if x == f64_le.as_u8() => f64_le,
+			x if x == f64_ge.as_u8() => f64_ge,
+			x if x == i32_clz.as_u8() => i32_clz,
+			x if x == i32_ctz.as_u8() => i32_ctz,
+			x if x == i32_popcnt.as_u8() => i32_popcnt,
+			x if x == i32_add.as_u8() => i32_add,
+			x if x == i32_sub.as_u8() => i32_sub,
+			x if x == i32_mul.as_u8() => i32_mul,
+			x if x == i32_div_s.as_u8() => i32_div_s,
+			x if x == i32_div_u.as_u8() => i32_div_u,
+			x if x == i32_rem_s.as_u8() => i32_rem_s,
+			x if x == i32_rem_u.as_u8() => i32_rem_u,
+			x if x == i32_and.as_u8() => i32_and,
+			x if x == i32_or.as_u8() => i32_or,
+			x if x == i32_xor.as_u8() => i32_xor,
+			x if x == i32_shl.as_u8() => i32_shl,
+			x if x == i32_shr_s.as_u8() => i32_shr_s,
+			x if x == i32_shr_u.as_u8() => i32_shr_u,
+			x if x == i32_rotl.as_u8() => i32_rotl,
+			x if x == i32_rotr.as_u8() => i32_rotr,
+			x if x == i64_clz.as_u8() => i64_clz,
+			x if x == i64_ctz.as_u8() => i64_ctz,
+			x if x == i64_popcnt.as_u8() => i64_popcnt,
+			x if x == i64_add.as_u8() => i64_add,
+			x if x == i64_sub.as_u8() => i64_sub,
+			x if x == i64_mul.as_u8() => i64_mul,
+			x if x == i64_div_s.as_u8() => i64_div_s,
+			x if x == i64_div_u.as_u8() => i64_div_u,
+			x if x == i64_rem_s.as_u8() => i64_rem_s,
+			x if x == i64_rem_u.as_u8() => i64_rem_u,
+			x if x == i64_and.as_u8() => i64_and,
+			x if x == i64_or.as_u8() => i64_or,
+			x if x == i64_xor.as_u8() => i64_xor,
+			x if x == i64_shl.as_u8() => i64_shl,
+			x if x == i64_shr_s.as_u8() => i64_shr_s,
+			x if x == i64_shr_u.as_u8() => i64_shr_u,
+			x if x == i64_rotl.as_u8() => i64_rotl,
+			x if x == i64_rotr.as_u8() => i64_rotr,
+			x if x == f32_abs.as_u8() => f32_abs,
+			x if x == f32_neg.as_u8() => f32_neg,
+			x if x == f32_ceil.as_u8() => f32_ceil,
+			x if x == f32_floor.as_u8() => f32_floor,
+			x if x == f32_trunc.as_u8() => f32_trunc,
+			x if x == f32_nearest.as_u8() => f32_nearest,
+			x if x == f32_sqrt.as_u8() => f32_sqrt,
+			x if x == f32_add.as_u8() => f32_add,
+			x if x == f32_sub.as_u8() => f32_sub,
+			x if x == f32_mul.as_u8() => f32_mul,
+			x if x == f32_div.as_u8() => f32_div,
+			x if x == f32_min.as_u8() => f32_min,
+			x if x == f32_max.as_u8() => f32_max,
+			x if x == f32_copysign.as_u8() => f32_copysign,
+			x if x == f64_abs.as_u8() => f64_abs,
+			x if x == f64_neg.as_u8() => f64_neg,
+			x if x == f64_ceil.as_u8() => f64_ceil,
+			x if x == f64_floor.as_u8() => f64_floor,
+			x if x == f64_trunc.as_u8() => f64_trunc,
+			x if x == f64_nearest.as_u8() => f64_nearest,
+			x if x == f64_sqrt.as_u8() => f64_sqrt,
+			x if x == f64_add.as_u8() => f64_add,
+			x if x == f64_sub.as_u8() => f64_sub,
+			x if x == f64_mul.as_u8() => f64_mul,
+			x if x == f64_div.as_u8() => f64_div,
+			x if x == f64_min.as_u8() => f64_min,
+			x if x == f64_max.as_u8() => f64_max,
+			x if x == f64_copysign.as_u8() => f64_copysign,
+			x if x == i32_wrap_i64.as_u8() => i32_wrap_i64,
+			x if x == i32_trunc_f32_s.as_u8() => i32_trunc_f32_s,
+			x if x == i32_trunc_f32_u.as_u8() => i32_trunc_f32_u,
+			x if x == i32_trunc_f64_s.as_u8() => i32_trunc_f64_s,
+			x if x == i32_trunc_f64_u.as_u8() => i32_trunc_f64_u,
+			x if x == i64_extend_i32_s.as_u8() => i64_extend_i32_s,
+			x if x == i64_extend_i32_u.as_u8() => i64_extend_i32_u,
+			x if x == i64_trunc_f32_s.as_u8() => i64_trunc_f32_s,
+			x if x == i64_trunc_f32_u.as_u8() => i64_trunc_f32_u,
+			x if x == i64_trunc_f64_s.as_u8() => i64_trunc_f64_s,
+			x if x == i64_trunc_f64_u.as_u8() => i64_trunc_f64_u,
+			x if x == f32_convert_i32_s.as_u8() => f32_convert_i32_s,
+			x if x == f32_convert_i32_u.as_u8() => f32_convert_i32_u,
+			x if x == f32_convert_i64_s.as_u8() => f32_convert_i64_s,
+			x if x == f32_convert_i64_u.as_u8() => f32_convert_i64_u,
+			x if x == f32_demote_f64.as_u8() => f32_demote_f64,
+			x if x == f64_convert_i32_s.as_u8() => f64_convert_i32_s,
+			x if x == f64_convert_i32_u.as_u8() => f64_convert_i32_u,
+			x if x == f64_convert_i64_s.as_u8() => f64_convert_i64_s,
+			x if x == f64_convert_i64_u.as_u8() => f64_convert_i64_u,
+			x if x == f64_promote_f32.as_u8() => f64_promote_f32,
+			x if x == i32_reinterpret_f32.as_u8() => i32_reinterpret_f32,
+			x if x == i64_reinterpret_f64.as_u8() => i64_reinterpret_f64,
+			x if x == f32_reinterpret_i32.as_u8() => f32_reinterpret_i32,
+			x if x == f64_reinterpret_i64.as_u8() => f64_reinterpret_i64,
+			x if x == i32_extend8_s.as_u8() => i32_extend8_s,
+			x if x == i32_extend16_s.as_u8() => i32_extend16_s,
+			x if x == i64_extend8_s.as_u8() => i64_extend8_s,
+			x if x == i64_extend16_s.as_u8() => i64_extend16_s,
+			x if x == i64_extend32_s.as_u8() => i64_extend32_s,
+			_ => {
+				if cfg!(debug_assertions) {
+					panic!("Unsupported instruction: 0x{:02X}", instr);
+				}
+				return None;
+			}
+		});
+	}
+	Some((block, 0))
 }

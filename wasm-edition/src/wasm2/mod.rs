@@ -52,6 +52,9 @@ impl Wasm {
 				_ => return Err(UnsupportedSection(section_id)),
 			}
 		}
+		for (t, f) in code {
+			println!("{:?} -> {:#?}", t, f);
+		}
 		Ok(Wasm {})
 	}
 }
