@@ -11,7 +11,9 @@ fn main() {
 	let mut data: Vec<u8> = vec![];
 	data.extend(include_bytes!("minimal.wasm"));
 	match Wasm::read(&*data) {
-		Ok(_) => (),
+		Ok(wasm) => {
+			wasm.instantiate().call("main".to_string());
+		},
 		Err(cause) => {
 			let prefix = "Failed to parse WASM file because of";
 			if std::io::stdout().is_terminal() {
