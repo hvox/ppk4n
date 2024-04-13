@@ -6,8 +6,11 @@ mod valtype;
 use instr::Instr;
 use valtype::Type;
 
+use std::collections::HashMap;
+
 pub struct Wasm {
 	pub imports: Vec<(FnType, String, String)>,
+	pub exports: HashMap<String, usize>,
 	pub functions: Vec<(FnType, Vec<Type>, Vec<Instr>)>,
 	pub init_ptr: Option<usize>,
 }
@@ -71,9 +74,11 @@ impl Wasm {
 		check!(Corrupted, functions.len() == code.len());
 		check!(Corrupted, imports.iter().all(|(_, _, t)| *t < types.len()));
 		check!(Corrupted, functions.iter().all(|&t| t < types.len()));
+		check!(Corrupted, export.iter().all(|&(_, i)| i < imports.len() + functions.len()));
 		check!(Corrupted, start.is_none() || start.unwrap() < types.len());
 		let imports = imports.into_iter().map(|(m, n, t)| (types[t].clone(), m, n)).collect();
+		let exports = export.into_iter().collect();
 		let fs = functions.into_iter().zip(code).map(|(t, b)| (types[t].clone(), b.0, b.1));
-		Ok(Wasm { imports, functions: fs.collect(), init_ptr: start })
+		Ok(Wasm { imports, exports, functions: fs.collect(), init_ptr: start })
 	}
 }
