@@ -208,10 +208,10 @@ fn read_block<Reader: super::binary::Reader>(
 			x if x == Unreachable.as_u8() => Unreachable,
 			x if x == Nop.as_u8() => Nop,
 			x if x == Block(vec![], vec![]).as_u8() => {
-				Block(Type::from_table(table, reader.i64())?, Instr::read_from(reader, table)?)
+				Block(Type::from_table(table, reader.i64())?, read_block(reader, table)?.0)
 			}
 			x if x == Loop(vec![], vec![]).as_u8() => {
-				Loop(Type::from_table(table, reader.i64())?, Instr::read_from(reader, table)?)
+				Loop(Type::from_table(table, reader.i64())?, read_block(reader, table)?.0)
 			}
 			x if x == IfElse(vec![], vec![], vec![]).as_u8() => {
 				let typ = Type::from_table(table, reader.i64())?;

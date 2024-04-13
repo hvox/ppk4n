@@ -53,7 +53,7 @@ impl Wasm {
 			}
 		}
 		for (t, f) in code {
-			println!("{:?} -> {:#?}", t, f);
+			println!("{:?} -> {:?}", t, f);
 		}
 		Ok(Wasm {})
 	}
