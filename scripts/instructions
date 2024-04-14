@@ -1,0 +1,315 @@
+#!/usr/bin/env python3
+"""
+Generate code to handle all instructions of WASM.
+
+Usage: {script} [options] METHOD
+
+Arguments:
+    METHOD - Method to generate: parse, typecheck or execute.
+
+Options:
+    -l, --lang=LANG  Language in which the code will be generated.
+    -h, --help       Show this screen and exit.
+"""
+import sys
+from contextlib import suppress
+from pathlib import Path
+from typing import NamedTuple
+
+
+LANGUAGES = {
+    "rust": {
+        "typ": lambda typ: typ.capitalize(),
+        "pop": lambda name: f"let {name} = stack.pop().unwrap();",
+        "pop_typ": lambda name, t: f"let {t}({name})" ' = stack.pop().unwrap() else { panic!("Wrong type") };',
+        "push": lambda expr: f"stack.push({expr});",
+        "push_typ": lambda expr, t: f"stack.push({t}{expr});",
+    }
+}
+
+
+def main(script_name: str, *script_args: str):
+    doc = __doc__.format(script=Path(script_name).name.replace(" ", "-"))
+    args = __import__("docopt").docopt(doc, script_args)
+    method = args["METHOD"]
+    if not (lang := args["--lang"]):
+        files = list(Path().resolve().iterdir())
+        lang = "rust" if any(str(f).endswith(".rs") for f in files) else None
+    lang = LANGUAGES[lang]
+    match method.lower().strip():
+        case "execute":
+            generate_execution(lang)
+        case _:
+            print(f"Unsupported generation request: {method}", file=sys.stderr)
+            exit(1)
+
+
+def generate_execution(lang):
+    for instr in all_instructions():
+        print(instr)
+
+
+class Instr(NamedTuple):
+    opcode: bytes
+    name: str
+    fields: list[str]
+    input: list[str]
+    output: list[str]
+
+    @staticmethod
+    def new(row: str):
+        opcode, name_and_fields, stack = [s.strip() for s in row.split(":")]
+        name, *fields = name_and_fields.split()
+        opcode = opcode.replace(" ", "").replace("0x", "")
+        opcode = bytes([int(opcode[i: i + 2], 16) for i in range(0, len(opcode), 2)])
+        input, output = stack.split(">") if ">" in stack else ("", "")
+        input = list(input.strip().split())
+        output = list(output.strip().split())
+        return Instr(opcode, name, fields, input, output)
+
+
+INSTRUCTIONS = """
+    ██ Control Flow Instructions
+    ----------------------------
+    TODO  TODO  TODO  TODO  TODO
+    TODOTODOTODOTODOTODOTODOTODO
+
+
+    ██ Parametric Instructions
+    -------------------------
+    0x1A : drop   : any >
+    0x1B : select : num num i32 > num
+
+
+    ██ Variable Instructions
+    ---------------------------------
+    0x20 : local.get  u32 : > any
+    0x21 : local.set  u32 : any >
+    0x22 : local.tee  u32 : any > any
+    0x23 : global.get u32 : > any
+    0x24 : global.set u32 : any >
+
+
+    ██ Memory Instructions
+    ---------------------------------------
+    0x28 : i32.load u32 u32     : i32 > i32
+    0x29 : i64.load u32 u32     : i32 > i64
+    0x2A : f32.load u32 u32     : i32 > f32
+    0x2B : f64.load u32 u32     : i32 > f64
+    0x2C : i32.load8_s u32 u32  : i32 > i32
+    0x2D : i32.load8_u u32 u32  : i32 > i32
+    0x2E : i32.load16_s u32 u32 : i32 > i32
+    0x2F : i32.load16_u u32 u32 : i32 > i32
+    0x30 : i64.load8_s u32 u32  : i32 > i64
+    0x31 : i64.load8_u u32 u32  : i32 > i64
+    0x32 : i64.load16_s u32 u32 : i32 > i64
+    0x33 : i64.load16_u u32 u32 : i32 > i64
+    0x34 : i64.load32_s u32 u32 : i32 > i64
+    0x35 : i64.load32_u u32 u32 : i32 > i64
+    0x36 : i32.store u32 u32    : i32 i32 >
+    0x37 : i64.store u32 u32    : i32 i64 >
+    0x38 : f32.store u32 u32    : i32 f32 >
+    0x39 : f64.store u32 u32    : i32 f64 >
+    0x3A : i32.store8 u32 u32   : i32 i32 >
+    0x3B : i32.store16 u32 u32  : i32 i32 >
+    0x3C : i64.store8 u32 u32   : i32 i64 >
+    0x3D : i64.store16 u32 u32  : i32 i64 >
+    0x3E : i64.store32 u32 u32  : i32 i64 >
+    ---------------------------------------
+    0x3F 0x00 : memory.size     : > i32
+    0x40 0x00 : memory.grow     : i32 > i32
+
+
+    ██ Numeric Instructions
+    ---------------------------
+    0x41 : i32.const i32 :> i31
+    0x42 : i64.const i64 :> i64
+    0x43 : f32.const f32 :> f32
+    0x44 : f64.const f64 :> f64
+    -------------------------------
+    0x45 : i32.eqz  : i32 > i32
+    0x46 : i32.eq   : i32 i32 > i32
+    0x47 : i32.ne   : i32 i32 > i32
+    0x48 : i32.lt_s : i32 i32 > i32
+    0x49 : i32.lt_u : i32 i32 > i32
+    0x4A : i32.gt_s : i32 i32 > i32
+    0x4B : i32.gt_u : i32 i32 > i32
+    0x4C : i32.le_s : i32 i32 > i32
+    0x4D : i32.le_u : i32 i32 > i32
+    0x4E : i32.ge_s : i32 i32 > i32
+    0x4F : i32.ge_u : i32 i32 > i32
+    -------------------------------
+    0x50 : i64.eqz  : i64 > i64
+    0x51 : i64.eq   : i64 i64 > i64
+    0x52 : i64.ne   : i64 i64 > i64
+    0x53 : i64.lt_s : i64 i64 > i64
+    0x54 : i64.lt_u : i64 i64 > i64
+    0x55 : i64.gt_s : i64 i64 > i64
+    0x56 : i64.gt_u : i64 i64 > i64
+    0x57 : i64.le_s : i64 i64 > i64
+    0x58 : i64.le_u : i64 i64 > i64
+    0x59 : i64.ge_s : i64 i64 > i64
+    0x5A : i64.ge_u : i64 i64 > i64
+    -------------------------------
+    0x5B : f32.eq : f32 f32 > f32
+    0x5C : f32.ne : f32 f32 > f32
+    0x5D : f32.lt : f32 f32 > f32
+    0x5E : f32.gt : f32 f32 > f32
+    0x5F : f32.le : f32 f32 > f32
+    0x60 : f32.ge : f32 f32 > f32
+    -----------------------------
+    0x61 : f64.eq : f64 f64 > f64
+    0x62 : f64.ne : f64 f64 > f64
+    0x63 : f64.lt : f64 f64 > f64
+    0x64 : f64.gt : f64 f64 > f64
+    0x65 : f64.le : f64 f64 > f64
+    0x66 : f64.ge : f64 f64 > f64
+    --------------------------------
+    0x67 : i32.clz    : i32 > i32
+    0x68 : i32.ctz    : i32 > i32
+    0x69 : i32.popcnt : i32 > i32
+    0x6A : i32.add    : i32 i32 > i32
+    0x6B : i32.sub    : i32 i32 > i32
+    0x6C : i32.mul    : i32 i32 > i32
+    0x6D : i32.div_s  : i32 i32 > i32
+    0x6E : i32.div_u  : i32 i32 > i32
+    0x6F : i32.rem_s  : i32 i32 > i32
+    0x70 : i32.rem_u  : i32 i32 > i32
+    0x71 : i32.and    : i32 i32 > i32
+    0x72 : i32.or     : i32 i32 > i32
+    0x73 : i32.xor    : i32 i32 > i32
+    0x74 : i32.shl    : i32 i32 > i32
+    0x75 : i32.shr_s  : i32 i32 > i32
+    0x76 : i32.shr_u  : i32 i32 > i32
+    0x77 : i32.rotl   : i32 i32 > i32
+    0x78 : i32.rotr   : i32 i32 > i32
+    ---------------------------------
+    0x79 : i64.clz    : i64 > i64
+    0x7A : i64.ctz    : i64 > i64
+    0x7B : i64.popcnt : i64 > i64
+    0x7C : i64.add    : i64 i64 > i64
+    0x7D : i64.sub    : i64 i64 > i64
+    0x7E : i64.mul    : i64 i64 > i64
+    0x7F : i64.div_s  : i64 i64 > i64
+    0x80 : i64.div_u  : i64 i64 > i64
+    0x81 : i64.rem_s  : i64 i64 > i64
+    0x82 : i64.rem_u  : i64 i64 > i64
+    0x83 : i64.and    : i64 i64 > i64
+    0x84 : i64.or     : i64 i64 > i64
+    0x85 : i64.xor    : i64 i64 > i64
+    0x86 : i64.shl    : i64 i64 > i64
+    0x87 : i64.shr_s  : i64 i64 > i64
+    0x88 : i64.shr_u  : i64 i64 > i64
+    0x89 : i64.rotl   : i64 i64 > i64
+    0x8A : i64.rotr   : i64 i64 > i64
+    ---------------------------------
+    0x8B : f32.abs      : f32 > f32
+    0x8C : f32.neg      : f32 > f32
+    0x8D : f32.ceil     : f32 > f32
+    0x8E : f32.floor    : f32 > f32
+    0x8F : f32.trunc    : f32 > f32
+    0x90 : f32.nearest  : f32 > f32
+    0x91 : f32.sqrt     : f32 f32 > f32
+    0x92 : f32.add      : f32 f32 > f32
+    0x93 : f32.sub      : f32 f32 > f32
+    0x94 : f32.mul      : f32 f32 > f32
+    0x95 : f32.div      : f32 f32 > f32
+    0x96 : f32.min      : f32 f32 > f32
+    0x97 : f32.max      : f32 f32 > f32
+    0x98 : f32.copysign : f32 f32 > f32
+    -----------------------------------
+    0x99 : f64.abs      : f64 > f64
+    0x9A : f64.neg      : f64 > f64
+    0x9B : f64.ceil     : f64 > f64
+    0x9C : f64.floor    : f64 > f64
+    0x9D : f64.trunc    : f64 > f64
+    0x9E : f64.nearest  : f64 > f64
+    0x9F : f64.sqrt     : f64 > f64
+    0xA0 : f64.add      : f64 f64 > f64
+    0xA1 : f64.sub      : f64 f64 > f64
+    0xA2 : f64.mul      : f64 f64 > f64
+    0xA3 : f64.div      : f64 f64 > f64
+    0xA4 : f64.min      : f64 f64 > f64
+    0xA5 : f64.max      : f64 f64 > f64
+    0xA6 : f64.copysign : f64 f64 > f64
+    --------------------------------------
+    0xA7 : i32.wrap_i64        : i64 > i32
+    0xA8 : i32.trunc_f32_s     : f32 > i32
+    0xA9 : i32.trunc_f32_u     : f32 > i32
+    0xAA : i32.trunc_f64_s     : f64 > i32
+    0xAB : i32.trunc_f64_u     : f64 > i32
+    0xAC : i64.extend_i32_s    : i32 > i64
+    0xAD : i64.extend_i32_u    : i32 > i64
+    0xAE : i64.trunc_f32_s     : f32 > i64
+    0xAF : i64.trunc_f32_u     : f32 > i64
+    0xB0 : i64.trunc_f64_s     : f64 > i64
+    0xB1 : i64.trunc_f64_u     : f64 > i64
+    0xB2 : f32.convert_i32_s   : i32 > f32
+    0xB3 : f32.convert_i32_u   : i32 > f32
+    0xB4 : f32.convert_i64_s   : i64 > f32
+    0xB5 : f32.convert_i64_u   : i64 > f32
+    0xB6 : f32.demote_f64      : f64 > f32
+    0xB7 : f64.convert_i32_s   : i32 > f64
+    0xB8 : f64.convert_i32_u   : i32 > f64
+    0xB9 : f64.convert_i64_s   : i64 > f64
+    0xBA : f64.convert_i64_u   : i64 > f64
+    0xBB : f64.promote_f32     : f32 > f64
+    0xBC : i32.reinterpret_f32 : f32 > i32
+    0xBD : i64.reinterpret_f64 : f64 > i64
+    0xBE : f32.reinterpret_i32 : i32 > f32
+    0xBF : f64.reinterpret_i64 : i64 > f64
+    0xC0 : i32.extend8_s       : i32 > i32
+    0xC1 : i32.extend16_s      : i32 > i32
+    0xC2 : i64.extend8_s       : i64 > i64
+    0xC3 : i64.extend16_s      : i64 > i64
+    0xC4 : i64.extend32_s      : i64 > i64
+    -------------------------------------------
+    0xFC 0x00 : i32.trunc_sat_f32_s : f32 > i32
+    0xFC 0x01 : i32.trunc_sat_f32_u : f32 > i32
+    0xFC 0x02 : i32.trunc_sat_f64_s : f64 > i32
+    0xFC 0x03 : i32.trunc_sat_f64_u : f64 > i32
+    0xFC 0x04 : i64.trunc_sat_f32_s : f32 > i64
+    0xFC 0x05 : i64.trunc_sat_f32_u : f32 > i64
+    0xFC 0x06 : i64.trunc_sat_f64_s : f64 > i64
+    0xFC 0x07 : i64.trunc_sat_f64_u : f64 > i64
+"""
+
+new_instructions = """
+"""
+for i, instr in enumerate(new_instructions.strip().split(), start=0x20):
+    instr = instr.strip()
+    name = instr.ljust(19)
+    output, input = instr.split(".", 1)
+    t1 = next((t for t in "i32 i64 f32 f64".split() if t in input), output)
+    t2 = output
+    print(f"    0x{i:02X} : {name} : {t1} > {t2}")
+if new_instructions.strip():
+    exit(0)
+
+for instr in INSTRUCTIONS.strip().split("\n"):
+    instr = instr.strip()
+    if ":" in instr:
+        # print(Instr.new(instr))
+        pass
+
+
+def all_instructions():
+    counter = 0
+    section = None
+    for instr in INSTRUCTIONS.strip().split("\n"):
+        counter += 1
+        if counter > 20:
+            break
+        instr = instr.strip()
+        if instr.startswith("██ "):
+            section = instr.split(maxsplit=1)[1]
+        elif ":" in instr:
+            if section is not None:
+                print(f"\n// {section}")
+                section = None
+            yield Instr.new(instr)
+
+
+if __name__ == "__main__":
+    with suppress(KeyboardInterrupt):
+        main(sys.argv[0], *sys.argv[1:])
