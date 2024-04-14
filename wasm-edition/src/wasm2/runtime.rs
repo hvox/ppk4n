@@ -1,22 +1,37 @@
 use super::{instr::Instr, valtype::Type, Wasm};
-use std::mem::transmute;
+use std::{collections::HashMap, mem::transmute};
 
 impl Wasm {
-	pub fn instantiate(&self) -> Runtime {
-		Runtime::from(&self)
+	pub fn instantiate<'a>(&'a self, environment: Environment<'a>) -> Runtime {
+		Runtime::from(&self, environment)
 	}
 }
 
+type Environment<'a> = HashMap<String, HashMap<String, &'a dyn Fn(Vec<Value>) -> Vec<Value>>>;
+// type DynFn = dyn Fn(Vec<Value>) -> Vec<Value>;
+
 pub struct Runtime<'a> {
 	module: &'a Wasm,
-	// imports: ...,
+	environment: Environment<'a>,
 	// memory: ...,
 	// globals: ...,
 }
 
+#[derive(Debug)]
+pub enum Value {
+	I32(i32),
+	I64(i64),
+	F32(f32),
+	F64(f64),
+	Str(String),
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct RawValue(u64);
+
 struct State {
-	locals: Vec<Value>,
-	stack: Vec<Value>,
+	locals: Vec<RawValue>,
+	stack: Vec<RawValue>,
 }
 
 enum BlockResult {
@@ -25,15 +40,12 @@ enum BlockResult {
 	End,
 }
 
-#[derive(Clone, Copy, Debug)]
-pub struct Value(u64);
-
 impl Runtime<'_> {
-	pub fn from<'a>(module: &'a Wasm) -> Runtime<'a> {
-		Runtime { module }
+	pub fn from<'a>(module: &'a Wasm, environment: Environment<'a>) -> Runtime<'a> {
+		Runtime { module, environment }
 	}
 
-	pub fn call(&mut self, function_name: String) -> Vec<Value> {
+	pub fn call(&mut self, function_name: String) -> Vec<RawValue> {
 		let f = self.module.exports[&function_name];
 		let mut state = State { locals: vec![], stack: vec![] };
 		self.eval_fn(&mut state, f);
@@ -42,11 +54,13 @@ impl Runtime<'_> {
 
 	fn eval_fn(&mut self, state: &mut State, f: usize) {
 		if f < self.module.imports.len() {
-			todo!("Imports should be in runtime struct somehow...");
+			let (typ, module, name) = &self.module.imports[f];
+			let args = typ.params.iter().map(|t| state.stack.pop().unwrap().to(t)).rev().collect();
+			state.stack.extend(self.environment[module][name](args).into_iter().map(Value::raw));
 		} else {
 			let f = f - self.module.imports.len();
 			let (t, locals, body) = &self.module.functions[f];
-			let locals = locals.iter().map(|_| Value::NONE).collect();
+			let locals = locals.iter().map(|_| RawValue::NONE).collect();
 			let mut state = State { locals, stack: vec![] };
 			self.eval_block(&mut state, body);
 		}
@@ -111,10 +125,10 @@ impl Runtime<'_> {
 				LocalTee(i) => state.locals[*i as usize] = *state.stack.last().unwrap(),
 				GlobalGet(_) => todo!(),
 				GlobalSet(_) => todo!(),
-				ConstI32(value) => state.stack.push(Value::from(*value)),
-				ConstI64(value) => state.stack.push(Value::from(*value)),
-				ConstF32(value) => state.stack.push(Value::from(*value)),
-				ConstF64(value) => state.stack.push(Value::from(*value)),
+				ConstI32(value) => state.stack.push(RawValue::from(*value)),
+				ConstI64(value) => state.stack.push(RawValue::from(*value)),
+				ConstF32(value) => state.stack.push(RawValue::from(*value)),
+				ConstF64(value) => state.stack.push(RawValue::from(*value)),
 				i32_eqz => todo!(),
 				i32_eq => todo!(),
 				i32_ne => todo!(),
@@ -250,7 +264,13 @@ impl Runtime<'_> {
 }
 
 impl Value {
-	pub const NONE: Value = Value(0);
+	pub fn raw(self) -> RawValue {
+		RawValue::from(self)
+	}
+}
+
+impl RawValue {
+	pub const NONE: RawValue = RawValue(0);
 	pub fn i32(self) -> i32 {
 		self.0 as i32
 	}
@@ -269,34 +289,62 @@ impl Value {
 	pub fn f64(self) -> f64 {
 		unsafe { transmute(self.u64()) }
 	}
+	pub fn to(self, typ: &Type) -> Value {
+		match typ {
+			Type::None => todo!(),
+			Type::Str24 => todo!(),
+			Type::Str16 => todo!(),
+			Type::Str8 => todo!(),
+			Type::Str => todo!(),
+			Type::Ref => todo!(),
+			Type::Fun => todo!(),
+			Type::Vec => todo!(),
+			Type::F64 => Value::F64(self.f64()),
+			Type::F32 => Value::F32(self.f32()),
+			Type::I64 => Value::I64(self.i64()),
+			Type::I32 => Value::I32(self.i32()),
+		}
+	}
 }
 
-impl std::fmt::Display for Value {
+impl std::fmt::Display for RawValue {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "{}", self.i64())
 	}
 }
 
-impl std::convert::From<i32> for Value {
+impl std::convert::From<i32> for RawValue {
 	fn from(value: i32) -> Self {
-		unsafe { Value(transmute(value as i64)) }
+		unsafe { RawValue(transmute(value as i64)) }
 	}
 }
 
-impl std::convert::From<i64> for Value {
+impl std::convert::From<i64> for RawValue {
 	fn from(value: i64) -> Self {
-		unsafe { Value(transmute(value)) }
+		unsafe { RawValue(transmute(value)) }
 	}
 }
 
-impl std::convert::From<f32> for Value {
+impl std::convert::From<f32> for RawValue {
 	fn from(value: f32) -> Self {
-		unsafe { Value::from(transmute::<f32, i32>(value)) }
+		unsafe { RawValue::from(transmute::<f32, i32>(value)) }
 	}
 }
 
-impl std::convert::From<f64> for Value {
+impl std::convert::From<f64> for RawValue {
 	fn from(value: f64) -> Self {
-		unsafe { Value(transmute(value)) }
+		unsafe { RawValue(transmute(value)) }
+	}
+}
+
+impl std::convert::From<Value> for RawValue {
+	fn from(value: Value) -> Self {
+		match value {
+			Value::I32(value) => Self::from(value),
+			Value::I64(value) => Self::from(value),
+			Value::F32(value) => Self::from(value),
+			Value::F64(value) => Self::from(value),
+			Value::Str(value) => todo!(),
+		}
 	}
 }

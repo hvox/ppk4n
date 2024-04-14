@@ -2,7 +2,7 @@ mod binary;
 mod errors;
 mod instr;
 mod macros;
-mod runtime;
+pub mod runtime;
 mod valtype;
 use instr::Instr;
 use valtype::Type;
