@@ -1,4 +1,4 @@
-workspace = { members = ["wasm-edition"] }
+workspace = { members = [ "ppk4n-translator","wasm-edition"] }
 [package]
 name = "ppk4n"
 version = "0.1.0"
