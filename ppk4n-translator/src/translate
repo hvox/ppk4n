@@ -1,0 +1,3 @@
+#!/usr/bin/env ppk4n
+
+print("hello world")
