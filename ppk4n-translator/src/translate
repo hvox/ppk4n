@@ -1,3 +1,52 @@
 #!/usr/bin/env ppk4n
+from __future__ import annotations
+from ppk4n import Path, dataclass
 
-print("hello world")
+
+def main(args: list[str]):
+    source = Path(args[1]).read_text()
+    print(source)
+
+
+type Statemnt = Import | TypeDef | FnDef | Assignment
+
+
+class Import(dataclass):
+    module: str
+    names: list[str]
+
+
+class TypeDef(dataclass):
+    name: str
+    value: Expr
+
+
+class FnDef(dataclass):
+    name: str
+    params: list[tuple[str, str]]
+    body: list[Expr]
+
+
+class Assignment(dataclass):
+    targets: list[str]
+    value: Expr
+
+
+type Expr = None
+
+
+class Call(dataclass):
+    callee: str
+    params: list[Expr]
+
+
+class Index(dataclass):
+    container: Expr
+    index: Expr
+
+
+def tokenize(source: str):
+    pass
+
+
+main(__import__("sys").argv)
