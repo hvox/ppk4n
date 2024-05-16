@@ -4,6 +4,7 @@
 #![allow(unused_assignments)]
 mod leb128;
 mod wasm2;
+mod simplerwasmlib;
 use std::{collections::HashMap, io::IsTerminal};
 use wasm2::{runtime::Value, Wasm};
 
