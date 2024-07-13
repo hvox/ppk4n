@@ -4,10 +4,12 @@ mod utils;
 
 fn main() -> Result<(), std::io::Error> {
 	let args: Vec<String> = std::env::args().collect();
-	if args.len() != 2 {
-		panic!("Invalid");
-	}
-	let source = std::fs::read_to_string(&args[1])?;
+	let source = if args.len() != 2 {
+		println!("You are invalid btw");
+		"+++-#nthar"
+	} else {
+		&std::fs::read_to_string(&args[1])?
+	};
 	let (tokens, errors) = scanner::scan_tokens(&source);
 	for error in errors {
 		let (line, column) = utils::get_grapheme_position(&source, error.position);
