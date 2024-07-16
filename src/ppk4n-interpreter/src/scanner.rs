@@ -3,15 +3,15 @@ use std::ops::Range;
 #[derive(Debug, Clone)]
 pub struct Token {
 	pub range: Range<usize>,
-	pub typ: TokenType,
+	pub typ: TokenKind,
 }
 
 #[derive(Debug, Clone)]
-pub enum TokenType {
+pub enum TokenKind {
 	Plus,
 	Minus,
 	Number(f64),
-	String(String),
+	String(Box<str>),
 	EOF,
 }
 
@@ -26,7 +26,7 @@ pub fn scan_tokens(source: &str) -> (Vec<Token>, Vec<ScannerError>) {
 	let mut tokens = vec![];
 	let mut errors = vec![];
 	while current < source_bytes.len() {
-		use TokenType::*;
+		use TokenKind::*;
 		match source_bytes[current] {
 			b'+' => tokens.push(Token::new(Plus, current..current + 1)),
 			b'-' => tokens.push(Token::new(Minus, current..current + 1)),
@@ -51,7 +51,7 @@ pub fn scan_tokens(source: &str) -> (Vec<Token>, Vec<ScannerError>) {
 		}
 		current += 1;
 	}
-	tokens.push(Token::new(TokenType::EOF, current..current));
+	tokens.push(Token::new(TokenKind::EOF, current..current));
 	(tokens, errors)
 }
 
@@ -64,11 +64,11 @@ fn scan_string(source: &str, start: usize) -> Token {
 	}
 	let end = if i < source.len() { i + 1 } else { i };
 	let value = String::from_utf8(string).unwrap();
-	Token::new(TokenType::String(value), start..end)
+	Token::new(TokenKind::String(value.into()), start..end)
 }
 
 impl Token {
-	fn new(typ: TokenType, range: Range<usize>) -> Token {
+	fn new(typ: TokenKind, range: Range<usize>) -> Token {
 		Token { typ, range }
 	}
 }
