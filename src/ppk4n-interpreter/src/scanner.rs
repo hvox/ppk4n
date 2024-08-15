@@ -3,7 +3,7 @@ use std::ops::Range;
 #[derive(Debug, Clone)]
 pub struct Token {
 	pub range: Range<usize>,
-	pub typ: TokenKind,
+	pub kind: TokenKind,
 }
 
 #[derive(Debug, Clone)]
@@ -69,6 +69,6 @@ fn scan_string(source: &str, start: usize) -> Token {
 
 impl Token {
 	fn new(typ: TokenKind, range: Range<usize>) -> Token {
-		Token { typ, range }
+		Token { kind: typ, range }
 	}
 }

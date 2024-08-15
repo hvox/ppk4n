@@ -25,7 +25,7 @@ fn main() -> Result<(), std::io::Error> {
 
 	println!("Tokens:");
 	for token in tokens {
-		println!("\t{:?}", token.typ);
+		println!("\t{:?}", token.kind);
 	}
 	Ok(())
 }
