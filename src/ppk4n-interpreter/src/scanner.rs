@@ -1,17 +1,17 @@
 use std::ops::Range;
 
 #[derive(Debug, Clone)]
-pub struct Token {
-	pub range: Range<usize>,
-	pub kind: TokenKind,
+pub struct Token<'a> {
+	pub source: &'a str,
+	// pub kind: TokenKind,
 }
 
 #[derive(Debug, Clone)]
 pub enum TokenKind {
-	Plus,
-	Minus,
-	Number(f64),
-	String(Box<str>),
+	Word, // TODO: split this kind
+	Comment,
+	Indent,
+	Dedent,
 	EOF,
 }
 
@@ -21,37 +21,45 @@ pub struct ScannerError {
 }
 
 pub fn scan_tokens(source: &str) -> (Vec<Token>, Vec<ScannerError>) {
-	let source_bytes = source.as_bytes();
-	let mut current = 0;
 	let mut tokens = vec![];
 	let mut errors = vec![];
-	while current < source_bytes.len() {
-		use TokenKind::*;
-		match source_bytes[current] {
-			b'+' => tokens.push(Token::new(Plus, current..current + 1)),
-			b'-' => tokens.push(Token::new(Minus, current..current + 1)),
-			b'#' => {
-				while current < source_bytes.len() && source_bytes[current] != b'\n' {
-					current += 1;
+	let mut indents = vec![0];
+	let mut chars = source.char_indices().peekable();
+	while let Some((i, char)) = chars.next() {
+		let j = i + char.len_utf8();
+		tokens.push(Token::new(match char {
+			'"' => {
+				let string = scan_string(source, i).source;
+				for _ in string.chars() {
+					chars.next();
 				}
+				string
 			}
-			b'"' => {
-				let token = scan_string(source, current);
-				current = token.range.end;
-				tokens.push(token);
+			char if char.is_ascii_punctuation() => &source[i..j],
+			'\t' | ' ' | '\r' => continue,
+			'\n' => {
+				let mut indentation = 0;
+				while let Some((_, 'a')) = chars.peek() {
+					if !char.is_ascii_alphanumeric() {
+						break;
+					}
+					chars.next();
+				}
 				continue;
 			}
-			b' ' => {}
-			b'\t' => {}
-			b'\r' => {}
-			b'\n' => {}
-			unexpected_character => {
-				errors.push(ScannerError { position: current });
+			char => {
+				let mut j = i + char.len_utf8();
+				while let Some((i, char)) = chars.peek() {
+					if !char.is_ascii_alphanumeric() {
+						break;
+					}
+					j += char.len_utf8();
+					chars.next();
+				}
+				&source[i..j]
 			}
-		}
-		current += 1;
+		}));
 	}
-	tokens.push(Token::new(TokenKind::EOF, current..current));
 	(tokens, errors)
 }
 
@@ -64,11 +72,11 @@ fn scan_string(source: &str, start: usize) -> Token {
 	}
 	let end = if i < source.len() { i + 1 } else { i };
 	let value = String::from_utf8(string).unwrap();
-	Token::new(TokenKind::String(value.into()), start..end)
+	Token { source: &source[start..end] }
 }
 
-impl Token {
-	fn new(typ: TokenKind, range: Range<usize>) -> Token {
-		Token { kind: typ, range }
+impl Token<'_> {
+	fn new(source: &str) -> Token {
+		Token { source }
 	}
 }
