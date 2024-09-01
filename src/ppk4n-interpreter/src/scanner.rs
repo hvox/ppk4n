@@ -21,6 +21,7 @@ pub struct ScannerError {
 }
 
 pub fn scan_tokens(source: &str) -> (Vec<Token>, Vec<ScannerError>) {
+	// TODO: use state machine and just append characters to last token
 	let mut tokens = vec![];
 	let mut errors = vec![];
 	let mut indents = vec![0];
@@ -30,23 +31,35 @@ pub fn scan_tokens(source: &str) -> (Vec<Token>, Vec<ScannerError>) {
 		tokens.push(Token::new(match char {
 			'"' => {
 				let string = scan_string(source, i).source;
-				for _ in string.chars() {
+				for _ in string.chars().skip(1) {
 					chars.next();
 				}
 				string
 			}
-			char if char.is_ascii_punctuation() => &source[i..j],
 			'\t' | ' ' | '\r' => continue,
 			'\n' => {
-				let mut indentation = 0;
-				while let Some((_, 'a')) = chars.peek() {
-					if !char.is_ascii_alphanumeric() {
+				let mut indent = 0;
+				while let Some(&(i, char)) = chars.peek() {
+					if !char.is_ascii_whitespace() {
 						break;
 					}
+					indent += 1;
 					chars.next();
+					if indents.last().is_some_and(|&x| x < indent) {
+						tokens.push(Token::new(&source[i..(i + 1)]));
+					}
+				}
+				if indents.last().is_some_and(|&x| x < indent) {
+					indents.push(indent);
+				} else if indents.last().is_some_and(|&x| x > indent) {
+					for _ in 0..(indents[indents.len() - 1] - indent) {
+						tokens.push(Token::new(&source[j..j]));
+					}
+					indents.push(indent);
 				}
 				continue;
 			}
+			char if char.is_ascii_punctuation() => &source[i..j],
 			char => {
 				let mut j = i + char.len_utf8();
 				while let Some((i, char)) = chars.peek() {

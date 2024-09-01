@@ -6,7 +6,7 @@ fn main() -> Result<(), std::io::Error> {
 	let args: Vec<String> = std::env::args().collect();
 	let source = if args.len() != 2 {
 		println!("You are invalid btw");
-		let source = "\"hi\" + \"hello there\"";
+		let source = "\"hi\" + \"hello there\"\n\thi\n# bibik";
 		println!("Testing source:\n\t{source}");
 		source
 	} else {
@@ -25,7 +25,7 @@ fn main() -> Result<(), std::io::Error> {
 
 	println!("Tokens:");
 	for token in tokens {
-		println!("\t{}", token.source);
+		println!("\t{}: {}", token.source.len(), token.source);
 	}
 	Ok(())
 }
