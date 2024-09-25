@@ -15,15 +15,9 @@ pub enum TokenKind {
 	EOF,
 }
 
-#[derive(Debug, Clone)]
-pub struct ScannerError {
-	pub position: usize,
-}
-
-pub fn scan_tokens(source: &str) -> (Vec<Token>, Vec<ScannerError>) {
+pub fn scan_tokens(source: &str) -> Vec<Token> {
 	// TODO: use state machine and just append characters to last token
 	let mut tokens = vec![];
-	let mut errors = vec![];
 	let mut indents = vec![0];
 	let mut chars = source.char_indices().peekable();
 	while let Some((i, char)) = chars.next() {
@@ -73,7 +67,7 @@ pub fn scan_tokens(source: &str) -> (Vec<Token>, Vec<ScannerError>) {
 			}
 		}));
 	}
-	(tokens, errors)
+	tokens
 }
 
 fn scan_string(source: &str, start: usize) -> Token {

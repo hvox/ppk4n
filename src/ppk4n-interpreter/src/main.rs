@@ -13,15 +13,7 @@ fn main() -> Result<(), std::io::Error> {
 		&std::fs::read_to_string(&args[1])?
 	};
 
-	let (tokens, errors) = scanner::scan_tokens(&source);
-	if errors.len() > 0 {
-		println!("\nERRORS:");
-	}
-	for error in errors {
-		let (line, column) = utils::get_grapheme_position(&source, error.position);
-		println!("ERROR: {}", source.lines().nth(line).unwrap());
-		println!("       {}^ unexpected character", " ".to_string().repeat(column));
-	}
+	let tokens = scanner::scan_tokens(&source);
 
 	println!("Tokens:");
 	for token in tokens {
