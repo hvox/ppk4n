@@ -17,7 +17,8 @@ fn main() -> Result<(), std::io::Error> {
 
 	println!("Tokens:");
 	for token in tokens {
-		println!("\t{}: {}", token.source.len(), token.source);
+		let i = token.as_ptr() as usize - source.as_ptr() as usize;
+		println!("\t[{}..{}] = {}", i, i + token.len(), token);
 	}
 	Ok(())
 }
