@@ -56,7 +56,7 @@ pub fn scan_tokens(source: &str) -> Vec<&str> {
 			char if char.is_ascii_punctuation() => &source[i..j],
 			char => {
 				let mut j = i + char.len_utf8();
-				while let Some((i, char)) = chars.peek() {
+				while let Some((_, char)) = chars.peek() {
 					if !char.is_ascii_alphanumeric() {
 						break;
 					}

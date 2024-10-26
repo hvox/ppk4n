@@ -1,3 +1,4 @@
+#[allow(unused)]
 pub fn get_grapheme_position(string: &str, byte_position: usize) -> (usize, usize) {
 	let mut lines = 0;
 	let mut line_start = 0;
