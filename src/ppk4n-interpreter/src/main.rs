@@ -7,7 +7,8 @@ fn main() -> Result<(), std::io::Error> {
 	let source = if args.len() != 2 {
 		println!("You are invalid btw");
 		let source = "\"hi\" + \"hello there\"\n\thi\n# bibik";
-		println!("Testing source:\n\t{source}");
+		let pretty_source = source.replace("\t", "→   ").replace("\n", "\n  ");
+		println!("Testing source:\n  {pretty_source}");
 		source
 	} else {
 		&std::fs::read_to_string(&args[1])?
