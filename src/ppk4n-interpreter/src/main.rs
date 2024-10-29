@@ -6,7 +6,7 @@ fn main() -> Result<(), std::io::Error> {
 	let args: Vec<String> = std::env::args().collect();
 	let source = if args.len() != 2 {
 		println!("You are invalid btw");
-		let source = "\"hi\" + \"hello there\"\n\thi\n# bibik";
+		let source = "\"hi\" + \"hello there\"\n\thi\n# bibik\n?";
 		let pretty_source = source.replace("\t", "→   ").replace("\n", "\n  ");
 		println!("Testing source:\n  {pretty_source}");
 		source

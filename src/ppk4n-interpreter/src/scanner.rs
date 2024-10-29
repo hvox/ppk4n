@@ -53,6 +53,13 @@ pub fn scan_tokens(source: &str) -> Vec<&str> {
 				}
 				continue;
 			}
+			'#' => {
+				let mut j = j;
+				while chars.peek().is_some_and(|&(_, c)| c != '\n') {
+					j += chars.next().unwrap().1.len_utf8();
+				}
+				&source[i..j]
+			}
 			char if char.is_ascii_punctuation() => &source[i..j],
 			char => {
 				let mut j = i + char.len_utf8();
