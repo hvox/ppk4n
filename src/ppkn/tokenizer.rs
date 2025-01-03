@@ -180,3 +180,40 @@ impl<'a> Tokenizer<'a> {
 		}
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::TokenKind::{self, *};
+
+	fn tokenize(source: &str) -> Vec<TokenKind> {
+		super::tokenize(source).into_iter().map(|x| x.kind).collect()
+	}
+
+	#[test]
+	fn whitespaces() {
+		let source = "   \r\t\n \n\t\t  \n \r\n  ";
+		let tokens = vec![Eof];
+		assert_eq!(tokenize(source), tokens);
+	}
+
+	#[test]
+	fn comments() {
+		let source = "+ # foo\nbar";
+		let tokens = vec![Plus, Identifier("bar".into()), Eof];
+		assert_eq!(tokenize(source), tokens);
+	}
+
+	#[test]
+	fn operators() {
+		let source = "+-*#+=/->}+\n<=>";
+		let tokens = vec![Plus, Minus, Star, LessEqual, Greater, Eof];
+		assert_eq!(tokenize(source), tokens);
+	}
+
+	#[test]
+	fn keywords() {
+		let source = "return bulbalka_123;";
+		let tokens = vec![Return, Identifier("bulbalka_123".into()), Semicolon, Eof];
+		assert_eq!(tokenize(source), tokens);
+	}
+}
