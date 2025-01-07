@@ -445,3 +445,46 @@ fn span<'a>(start: &'a str, end: &'a str) -> &'a str {
 		str::from_utf8_unchecked(bytes)
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use crate::ppkn::tokenizer::tokenize;
+
+	use super::*;
+
+	fn show_tokens(source: &str) {
+		let tokens: Vec<_> = tokenize(source).into_iter().map(|x| x.kind).collect();
+		println!("{:?}", tokens);
+	}
+
+	#[test]
+	fn whitespaces() {
+		let source = "# notheratonhe ahoe ";
+		let ast = Block { source: "", stmts: vec![] };
+		assert_eq!(parse(tokenize(source)), Ok(ast));
+	}
+
+	#[test]
+	fn function() {
+		let source = "fun hello() { print 'Hello world'; }";
+		let ast = "fun name() { print(string); }; ";
+		let result = parse(tokenize(source)).map(|ast| ast.to_string());
+		assert_eq!(result, Ok(ast.to_string()));
+	}
+
+	#[test]
+	fn arithmetic() {
+		let source = "x + 123 * y / bulbalka";
+		let ast = "(variable + ((number * variable) / variable)); ";
+		let result = parse(tokenize(source)).map(|ast| ast.to_string());
+		assert_eq!(result, Ok(ast.to_string()));
+	}
+
+	#[test]
+	fn types() {
+		let source = "x: i32 = bulbalka";
+		let ast = "variable: type = variable; ";
+		let result = parse(tokenize(source)).map(|ast| ast.to_string());
+		assert_eq!(result, Ok(ast.to_string()));
+	}
+}

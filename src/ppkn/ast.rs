@@ -78,3 +78,64 @@ pub enum BinOpKind {
 
 pub type Identifier<'a> = &'a str;
 pub type Typename<'a> = &'a str;
+
+impl<'a> ToString for Block<'a> {
+	fn to_string(&self) -> String {
+		let mut lines = String::new();
+		for stmt in &self.stmts {
+			lines.push_str(&stmt.to_string());
+			lines.push_str("; ");
+		}
+		lines
+	}
+}
+
+impl<'a> ToString for Stmt<'a> {
+	fn to_string(&self) -> String {
+		match &self.kind {
+			StmtKind::Expression(expr) => expr.to_string(),
+			StmtKind::Print(expr) => "print(".to_string() + &expr.to_string() + ")",
+			StmtKind::Println(expr) => "println(".to_string() + &expr.to_string() + ")",
+			StmtKind::Definition(_, _, expr) => "variable: type = ".to_string() + &expr.to_string(),
+			StmtKind::Assignment(_, expr) => todo!(),
+			StmtKind::If(expr, block, block1) => todo!(),
+			StmtKind::While(expr, block) => todo!(),
+			StmtKind::Return(expr) => todo!(),
+			StmtKind::Function(name, vec, block) => {
+				format!("fun name() {} {}{}", "{", block.to_string(), "}")
+			}
+			StmtKind::Class(_, vec) => todo!(),
+			StmtKind::Import(_) => todo!(),
+		}
+	}
+}
+
+impl<'a> ToString for Expr<'a> {
+	fn to_string(&self) -> String {
+		match &self.kind {
+			ExprKind::Integer(_) => String::from("number"),
+			ExprKind::String(_) => String::from("string"),
+			ExprKind::Variable(_) => String::from("variable"),
+			ExprKind::Grouping(expr) => todo!(),
+			ExprKind::Unary(unary_op, expr) => todo!(),
+			ExprKind::Binary(lhs, bin_op, rhs) => {
+				"(".to_string()
+					+ &lhs.to_string() + " "
+					+ match bin_op.kind {
+						BinOpKind::Minus => "-",
+						BinOpKind::Plus => "+",
+						BinOpKind::Slash => "/",
+						BinOpKind::Star => "*",
+						BinOpKind::Greater => ">",
+						BinOpKind::GreaterEqual => ">=",
+						BinOpKind::Less => "<",
+						BinOpKind::LessEqual => "<=",
+						BinOpKind::BangEqual => "!=",
+						BinOpKind::EqualEqual => "==",
+					} + " " + &rhs.to_string()
+					+ ")"
+			}
+			_ => todo!(),
+		}
+	}
+}
