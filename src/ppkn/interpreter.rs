@@ -26,6 +26,9 @@ impl Program<'_> {
 
 	fn exec_instr(&self, locals: &mut Vec<Value>, instr: &Instr) -> Option<Value> {
 		match &instr.kind {
+			super::ir::InstrKind::Operation(op) => {
+				self.eval_op(locals, &op);
+			}
 			super::ir::InstrKind::Definition(var_idx, op) => {
 				locals[*var_idx] = self.eval_op(locals, &op);
 			}

@@ -19,8 +19,8 @@ pub struct Function<'a> {
 
 #[derive(Clone, Debug)]
 pub struct FnType {
-	arguments: Box<[Type]>,
-	result: Type,
+	pub arguments: Box<[Type]>,
+	pub result: Type,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -41,6 +41,7 @@ pub struct Instr<'a> {
 pub enum InstrKind<'a> {
 	Definition(usize, Op<'a>),
 	Assignment(usize, Op<'a>),
+	Operation(Op<'a>),
 	Return(Op<'a>),
 	While(Op<'a>, Vec<Instr<'a>>),
 	Print(Op<'a>),

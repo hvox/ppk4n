@@ -41,8 +41,11 @@ impl<'a> Typechecker<'a> {
 		}
 		for stmt in &self.ast.stmts {
 			match &stmt.kind {
-				StmtKind::Function(name, _, body) => {
+				StmtKind::Function(name, args, body) => {
 					let mut locals = IndexMap::new();
+					for (name, typ) in args {
+						locals.insert(name.to_string(), self.get_type_from_name(typ)?);
+					}
 					let mut instrs = vec![];
 					for stmt in &body.stmts {
 						instrs.extend(self.typecheck_stmt(&mut locals, stmt)?);
@@ -81,7 +84,12 @@ impl<'a> Typechecker<'a> {
 				let op = self.typecheck_expr(&scope, expr)?;
 				instrs.push(Instr { source: stmt.source, kind: InstrKind::Definition(var_id, op) });
 			}
-			StmtKind::Expression(expr) => todo!(),
+			StmtKind::Expression(expr) => {
+				instrs.push(Instr {
+					source: stmt.source,
+					kind: InstrKind::Operation(self.typecheck_expr(scope, expr)?),
+				});
+			}
 			StmtKind::Print(expr) => {
 				instrs.push(Instr {
 					source: stmt.source,
