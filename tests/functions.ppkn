@@ -1,0 +1,8 @@
+fun f(x: int, y: int) {
+    print x
+	println y
+}
+
+fun main() {
+	f(123, "456") # 123456
+}

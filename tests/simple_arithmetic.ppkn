@@ -1,0 +1,8 @@
+fun main() {
+	x: int = 123
+	y: int = 321
+    println x + y # 444
+    println x - y # -198
+    println x * y # 39483
+    println y / x # 2
+}
