@@ -1,25 +1,26 @@
 #[derive(Clone, Debug, PartialEq)]
-pub struct Block<'a> {
+pub struct Block<'a, T> {
 	pub source: &'a str,
-	pub stmts: Vec<Expr<'a>>,
+	pub stmts: Vec<Expr<'a, T>>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct Expr<'a> {
+pub struct Expr<'a, T> {
 	pub source: &'a str,
-	pub kind: ExprKind<'a>,
+	pub kind: ExprKind<'a, T>,
+	pub additional_data: T,
 }
 
 #[derive(Clone, Debug, PartialEq)]
-pub enum ExprKind<'a> {
-	Print(Box<Expr<'a>>),
-	Println(Box<Expr<'a>>),
-	Definition(Identifier<'a>, Typename<'a>, Box<Expr<'a>>),
-	Assignment(Identifier<'a>, Box<Expr<'a>>),
-	If(Box<Expr<'a>>, Block<'a>, Option<Block<'a>>),
-	While(Box<Expr<'a>>, Block<'a>),
-	Return(Box<Expr<'a>>),
-	Function(Identifier<'a>, Vec<(Identifier<'a>, Typename<'a>)>, Block<'a>),
+pub enum ExprKind<'a, T> {
+	Print(Box<Expr<'a, T>>),
+	Println(Box<Expr<'a, T>>),
+	Definition(Identifier<'a>, Typename<'a>, Box<Expr<'a, T>>),
+	Assignment(Identifier<'a>, Box<Expr<'a, T>>),
+	If(Box<Expr<'a, T>>, Block<'a, T>, Option<Block<'a, T>>),
+	While(Box<Expr<'a, T>>, Block<'a, T>),
+	Return(Box<Expr<'a, T>>),
+	Function(Identifier<'a>, Vec<(Identifier<'a>, Typename<'a>)>, Block<'a, T>),
 	Class(Identifier<'a>, Vec<(Identifier<'a>, Typename<'a>)>),
 	Import(Identifier<'a>),
 
@@ -28,10 +29,10 @@ pub enum ExprKind<'a> {
 	String(Box<str>),
 	Variable(Box<str>),
 
-	Grouping(Box<Expr<'a>>),
-	Unary(UnaryOp<'a>, Box<Expr<'a>>),
-	Binary(Box<Expr<'a>>, BinOp<'a>, Box<Expr<'a>>),
-	FunctionCall(Box<Expr<'a>>, Vec<Expr<'a>>),
+	Grouping(Box<Expr<'a, T>>),
+	Unary(UnaryOp<'a>, Box<Expr<'a, T>>),
+	Binary(Box<Expr<'a, T>>, BinOp<'a>, Box<Expr<'a, T>>),
+	FunctionCall(Box<Expr<'a, T>>, Vec<Expr<'a, T>>),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -69,7 +70,16 @@ pub enum BinOpKind {
 pub type Identifier<'a> = &'a str;
 pub type Typename<'a> = &'a str;
 
-impl<'a> ToString for Block<'a> {
+impl<'a> Expr<'a, ()> {
+	pub fn new(source: &'a str, kind: ExprKind<'a, ()>) -> Self {
+		Self { source, kind, additional_data: () }
+	}
+}
+
+impl<'a, T> ToString for Block<'a, T>
+where
+	T: Clone,
+{
 	fn to_string(&self) -> String {
 		let mut lines = String::new();
 		for stmt in &self.stmts {
@@ -80,7 +90,10 @@ impl<'a> ToString for Block<'a> {
 	}
 }
 
-impl<'a> ToString for Expr<'a> {
+impl<'a, T> ToString for Expr<'a, T>
+where
+	T: Clone,
+{
 	fn to_string(&self) -> String {
 		match &self.kind {
 			ExprKind::Print(expr) => "print(".to_string() + &expr.to_string() + ")",

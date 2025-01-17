@@ -1,7 +1,11 @@
 use indexmap::IndexMap;
 
-use super::ast::*;
+use super::ast::{self, BinOpKind};
 use super::ir::*;
+
+type Block<'a> = ast::Block<'a, ()>;
+type Expr<'a> = ast::Expr<'a, ()>;
+type ExprKind<'a> = ast::ExprKind<'a, ()>;
 
 pub fn typecheck(program: Block) -> Result<Program, TypeError> {
 	Typechecker::new(program).typecheck()

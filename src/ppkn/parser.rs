@@ -1,8 +1,12 @@
 use core::str;
 use std::slice;
 
-use super::ast::*;
+use super::ast::{self, BinOp, BinOpKind, Identifier, Typename};
 use super::token::{Token, TokenKind};
+
+type Block<'a> = ast::Block<'a, ()>;
+type Expr<'a> = ast::Expr<'a, ()>;
+type ExprKind<'a> = ast::ExprKind<'a, ()>;
 
 pub fn parse(tokens: Vec<Token>) -> Result<Block, SyntaxError> {
 	Parser::new(tokens).parse()
@@ -52,17 +56,17 @@ impl<'a> Parser<'a> {
 	}
 
 	fn statement(&mut self) -> Result<Expr<'a>, SyntaxError<'a>> {
-		use ExprKind::*;
+		use ast::ExprKind::*;
 		let start_position = self.position;
 		let start = self.tokens[self.position].source;
 		if let Ok(expr) = self.print() {
-			Ok(Expr { source: span(start, expr.source), kind: Print(Box::new(expr)) })
+			Ok(Expr::new(span(start, expr.source), Print(Box::new(expr))))
 		} else if let Ok(expr) = self.println() {
-			Ok(Expr { source: span(start, expr.source), kind: Println(Box::new(expr)) })
+			Ok(Expr::new(span(start, expr.source), Println(Box::new(expr))))
 		} else if let Ok((variable, typ, value)) = self.definition() {
-			Ok(Expr { source: span(start, value.source), kind: Definition(variable, typ, value) })
+			Ok(Expr::new(span(start, value.source), Definition(variable, typ, value)))
 		} else if let Ok((variable, value)) = self.assignment() {
-			Ok(Expr { source: span(start, value.source), kind: Assignment(variable, value) })
+			Ok(Expr::new(span(start, value.source), Assignment(variable, value)))
 		} else if let Ok(if_statement) = self.if_statement() {
 			Ok(if_statement)
 		} else if let Ok(while_loop) = self.while_loop() {
@@ -162,10 +166,10 @@ impl<'a> Parser<'a> {
 			self.position = start_position;
 			err
 		})?;
-		Ok(Expr {
-			source: span(start.source, end.source),
-			kind: ExprKind::If(Box::new(condition), block, None),
-		})
+		Ok(Expr::new(
+			span(start.source, end.source),
+			ExprKind::If(Box::new(condition), block, None),
+		))
 	}
 
 	fn while_loop(&mut self) -> Result<Expr<'a>, SyntaxError<'a>> {
@@ -188,10 +192,7 @@ impl<'a> Parser<'a> {
 			self.position = start_position;
 			err
 		})?;
-		Ok(Expr {
-			source: span(start.source, end.source),
-			kind: ExprKind::While(Box::new(condition), block),
-		})
+		Ok(Expr::new(span(start.source, end.source), ExprKind::While(Box::new(condition), block)))
 	}
 
 	fn return_statement(&mut self) -> Result<Expr<'a>, SyntaxError<'a>> {
@@ -201,10 +202,10 @@ impl<'a> Parser<'a> {
 			self.position = start_position;
 			err
 		})?;
-		Ok(Expr {
-			source: span(start.source, return_value.source),
-			kind: ExprKind::Return(Box::new(return_value)),
-		})
+		Ok(Expr::new(
+			span(start.source, return_value.source),
+			ExprKind::Return(Box::new(return_value)),
+		))
 	}
 
 	fn function(&mut self) -> Result<Expr<'a>, SyntaxError<'a>> {
@@ -238,10 +239,10 @@ impl<'a> Parser<'a> {
 			self.position = start_position;
 			err
 		})?;
-		Ok(Expr {
-			source: span(first_token.source, closing_brace.source),
-			kind: ExprKind::Function(name.source, args, body),
-		})
+		Ok(Expr::new(
+			span(first_token.source, closing_brace.source),
+			ExprKind::Function(name.source, args, body),
+		))
 	}
 
 	fn function_arguments(
@@ -285,14 +286,14 @@ impl<'a> Parser<'a> {
 				_ => unreachable!(),
 			};
 			let rhs = self.arithmetic_expression()?;
-			expr = Expr {
-				source: span(expr.source, rhs.source),
-				kind: ExprKind::Binary(
+			expr = Expr::new(
+				span(expr.source, rhs.source),
+				ExprKind::Binary(
 					Box::new(expr),
 					BinOp { source: op.source, kind: binop_kind },
 					Box::new(rhs),
 				),
-			}
+			)
 		}
 		Ok(expr)
 	}
@@ -311,10 +312,10 @@ impl<'a> Parser<'a> {
 				Minus => BinOp { source, kind: BinOpKind::Minus },
 				_ => unreachable!(),
 			};
-			sum = Expr {
-				source: span(sum.source, factor.source),
-				kind: ExprKind::Binary(Box::new(sum), op, Box::new(factor)),
-			}
+			sum = Expr::new(
+				span(sum.source, factor.source),
+				ExprKind::Binary(Box::new(sum), op, Box::new(factor)),
+			)
 		}
 		Ok(sum)
 	}
@@ -333,10 +334,10 @@ impl<'a> Parser<'a> {
 				Slash => BinOp { source, kind: BinOpKind::Slash },
 				_ => unreachable!(),
 			};
-			product = Expr {
-				source: span(product.source, factor.source),
-				kind: ExprKind::Binary(Box::new(product), op, Box::new(factor)),
-			}
+			product = Expr::new(
+				span(product.source, factor.source),
+				ExprKind::Binary(Box::new(product), op, Box::new(factor)),
+			)
 		}
 		Ok(product)
 	}
@@ -369,10 +370,10 @@ impl<'a> Parser<'a> {
 			self.position = start_position;
 			err
 		})?;
-		return Ok(Expr {
-			source: span(self.tokens[start_position].source, end.source),
-			kind: ExprKind::FunctionCall(Box::new(function), args),
-		});
+		return Ok(Expr::new(
+			span(self.tokens[start_position].source, end.source),
+			ExprKind::FunctionCall(Box::new(function), args),
+		));
 	}
 
 	fn unary(&mut self) -> Result<Expr<'a>, SyntaxError<'a>> {
@@ -393,7 +394,7 @@ impl<'a> Parser<'a> {
 		};
 		let source = self.tokens[self.position].source;
 		self.position += 1;
-		return Ok(Expr { source, kind });
+		return Ok(Expr::new(source, kind));
 	}
 
 	fn expect_any(&mut self, expected_tokens: &[TokenKind]) -> Result<Token<'a>, SyntaxError<'a>> {
