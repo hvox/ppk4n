@@ -1,28 +1,7 @@
 #[derive(Clone, Debug, PartialEq)]
 pub struct Block<'a> {
 	pub source: &'a str,
-	pub stmts: Vec<Stmt<'a>>,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct Stmt<'a> {
-	pub source: &'a str,
-	pub kind: StmtKind<'a>,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub enum StmtKind<'a> {
-	Expression(Box<Expr<'a>>),
-	Print(Box<Expr<'a>>),
-	Println(Box<Expr<'a>>),
-	Definition(Identifier<'a>, Typename<'a>, Box<Expr<'a>>),
-	Assignment(Identifier<'a>, Box<Expr<'a>>),
-	If(Box<Expr<'a>>, Block<'a>, Option<Block<'a>>),
-	While(Box<Expr<'a>>, Block<'a>),
-	Return(Box<Expr<'a>>),
-	Function(Identifier<'a>, Vec<(Identifier<'a>, Typename<'a>)>, Block<'a>),
-	Class(Identifier<'a>, Vec<(Identifier<'a>, Typename<'a>)>),
-	Import(Identifier<'a>),
+	pub stmts: Vec<Expr<'a>>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -33,6 +12,17 @@ pub struct Expr<'a> {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum ExprKind<'a> {
+	Print(Box<Expr<'a>>),
+	Println(Box<Expr<'a>>),
+	Definition(Identifier<'a>, Typename<'a>, Box<Expr<'a>>),
+	Assignment(Identifier<'a>, Box<Expr<'a>>),
+	If(Box<Expr<'a>>, Block<'a>, Option<Block<'a>>),
+	While(Box<Expr<'a>>, Block<'a>),
+	Return(Box<Expr<'a>>),
+	Function(Identifier<'a>, Vec<(Identifier<'a>, Typename<'a>)>, Block<'a>),
+	Class(Identifier<'a>, Vec<(Identifier<'a>, Typename<'a>)>),
+	Import(Identifier<'a>),
+
 	Integer(u64),
 	Float(f64),
 	String(Box<str>),
@@ -90,29 +80,22 @@ impl<'a> ToString for Block<'a> {
 	}
 }
 
-impl<'a> ToString for Stmt<'a> {
-	fn to_string(&self) -> String {
-		match &self.kind {
-			StmtKind::Expression(expr) => expr.to_string(),
-			StmtKind::Print(expr) => "print(".to_string() + &expr.to_string() + ")",
-			StmtKind::Println(expr) => "println(".to_string() + &expr.to_string() + ")",
-			StmtKind::Definition(_, _, expr) => "variable: type = ".to_string() + &expr.to_string(),
-			StmtKind::Assignment(_, expr) => todo!(),
-			StmtKind::If(expr, block, block1) => todo!(),
-			StmtKind::While(expr, block) => todo!(),
-			StmtKind::Return(expr) => todo!(),
-			StmtKind::Function(name, vec, block) => {
-				format!("fun name() {} {}{}", "{", block.to_string(), "}")
-			}
-			StmtKind::Class(_, vec) => todo!(),
-			StmtKind::Import(_) => todo!(),
-		}
-	}
-}
-
 impl<'a> ToString for Expr<'a> {
 	fn to_string(&self) -> String {
 		match &self.kind {
+			ExprKind::Print(expr) => "print(".to_string() + &expr.to_string() + ")",
+			ExprKind::Println(expr) => "println(".to_string() + &expr.to_string() + ")",
+			ExprKind::Definition(_, _, expr) => "variable: type = ".to_string() + &expr.to_string(),
+			ExprKind::Assignment(_, expr) => todo!(),
+			ExprKind::If(expr, block, block1) => todo!(),
+			ExprKind::While(expr, block) => todo!(),
+			ExprKind::Return(expr) => todo!(),
+			ExprKind::Function(name, vec, block) => {
+				format!("fun name() {} {}{}", "{", block.to_string(), "}")
+			}
+			ExprKind::Class(_, vec) => todo!(),
+			ExprKind::Import(_) => todo!(),
+
 			ExprKind::Integer(_) => String::from("number"),
 			ExprKind::String(_) => String::from("string"),
 			ExprKind::Variable(_) => String::from("variable"),

@@ -51,18 +51,18 @@ impl<'a> Parser<'a> {
 		Ok(Block { source, stmts })
 	}
 
-	fn statement(&mut self) -> Result<Stmt<'a>, SyntaxError<'a>> {
-		use StmtKind::*;
+	fn statement(&mut self) -> Result<Expr<'a>, SyntaxError<'a>> {
+		use ExprKind::*;
 		let start_position = self.position;
 		let start = self.tokens[self.position].source;
 		if let Ok(expr) = self.print() {
-			Ok(Stmt { source: span(start, expr.source), kind: Print(Box::new(expr)) })
+			Ok(Expr { source: span(start, expr.source), kind: Print(Box::new(expr)) })
 		} else if let Ok(expr) = self.println() {
-			Ok(Stmt { source: span(start, expr.source), kind: Println(Box::new(expr)) })
+			Ok(Expr { source: span(start, expr.source), kind: Println(Box::new(expr)) })
 		} else if let Ok((variable, typ, value)) = self.definition() {
-			Ok(Stmt { source: span(start, value.source), kind: Definition(variable, typ, value) })
+			Ok(Expr { source: span(start, value.source), kind: Definition(variable, typ, value) })
 		} else if let Ok((variable, value)) = self.assignment() {
-			Ok(Stmt { source: span(start, value.source), kind: Assignment(variable, value) })
+			Ok(Expr { source: span(start, value.source), kind: Assignment(variable, value) })
 		} else if let Ok(if_statement) = self.if_statement() {
 			Ok(if_statement)
 		} else if let Ok(while_loop) = self.while_loop() {
@@ -72,7 +72,7 @@ impl<'a> Parser<'a> {
 		} else if let Ok(function) = self.function() {
 			Ok(function)
 		} else if let Ok(expr) = self.expression() {
-			Ok(Stmt { source: expr.source, kind: Expression(Box::new(expr)) })
+			Ok(expr)
 		} else {
 			self.position = start_position;
 			return Err(self.last_error);
@@ -143,7 +143,7 @@ impl<'a> Parser<'a> {
 		Ok((variable.source, Box::new(value)))
 	}
 
-	fn if_statement(&mut self) -> Result<Stmt<'a>, SyntaxError<'a>> {
+	fn if_statement(&mut self) -> Result<Expr<'a>, SyntaxError<'a>> {
 		let start_position = self.position;
 		let start = self.expect(TokenKind::If)?;
 		let condition = self.expression().map_err(|err| {
@@ -162,13 +162,13 @@ impl<'a> Parser<'a> {
 			self.position = start_position;
 			err
 		})?;
-		Ok(Stmt {
+		Ok(Expr {
 			source: span(start.source, end.source),
-			kind: StmtKind::If(Box::new(condition), block, None),
+			kind: ExprKind::If(Box::new(condition), block, None),
 		})
 	}
 
-	fn while_loop(&mut self) -> Result<Stmt<'a>, SyntaxError<'a>> {
+	fn while_loop(&mut self) -> Result<Expr<'a>, SyntaxError<'a>> {
 		let start_position = self.position;
 		let start = self.expect(TokenKind::While)?;
 		let condition = self.expression().map_err(|err| {
@@ -188,26 +188,26 @@ impl<'a> Parser<'a> {
 			self.position = start_position;
 			err
 		})?;
-		Ok(Stmt {
+		Ok(Expr {
 			source: span(start.source, end.source),
-			kind: StmtKind::While(Box::new(condition), block),
+			kind: ExprKind::While(Box::new(condition), block),
 		})
 	}
 
-	fn return_statement(&mut self) -> Result<Stmt<'a>, SyntaxError<'a>> {
+	fn return_statement(&mut self) -> Result<Expr<'a>, SyntaxError<'a>> {
 		let start_position = self.position;
 		let start = self.expect(TokenKind::Return)?;
 		let return_value = self.expression().map_err(|err| {
 			self.position = start_position;
 			err
 		})?;
-		Ok(Stmt {
+		Ok(Expr {
 			source: span(start.source, return_value.source),
-			kind: StmtKind::Return(Box::new(return_value)),
+			kind: ExprKind::Return(Box::new(return_value)),
 		})
 	}
 
-	fn function(&mut self) -> Result<Stmt<'a>, SyntaxError<'a>> {
+	fn function(&mut self) -> Result<Expr<'a>, SyntaxError<'a>> {
 		let start_position = self.position;
 		let first_token = self.expect(TokenKind::Fun)?;
 		let name = self.expect_identifier().map_err(|err| {
@@ -238,9 +238,9 @@ impl<'a> Parser<'a> {
 			self.position = start_position;
 			err
 		})?;
-		Ok(Stmt {
+		Ok(Expr {
 			source: span(first_token.source, closing_brace.source),
-			kind: StmtKind::Function(name.source, args, body),
+			kind: ExprKind::Function(name.source, args, body),
 		})
 	}
 

@@ -28,7 +28,7 @@ impl<'a> Typechecker<'a> {
 		let mut signatures = IndexMap::new();
 		for stmt in &self.ast.stmts {
 			match &stmt.kind {
-				StmtKind::Function(name, arguments, _) => {
+				ExprKind::Function(name, arguments, _) => {
 					let mut arg_types = vec![];
 					for (_, typ) in arguments.iter() {
 						arg_types.push(self.get_type_from_name(typ)?);
@@ -41,7 +41,7 @@ impl<'a> Typechecker<'a> {
 		}
 		for stmt in &self.ast.stmts {
 			match &stmt.kind {
-				StmtKind::Function(name, args, body) => {
+				ExprKind::Function(name, args, body) => {
 					let mut locals = IndexMap::new();
 					for (name, typ) in args {
 						locals.insert(name.to_string(), self.get_type_from_name(typ)?);
@@ -74,29 +74,23 @@ impl<'a> Typechecker<'a> {
 	fn typecheck_stmt(
 		&self,
 		scope: &mut IndexMap<String, Type>,
-		stmt: &Stmt<'a>,
+		stmt: &Expr<'a>,
 	) -> Result<Vec<Instr<'a>>, TypeError<'a>> {
 		let mut instrs = vec![];
 		match &stmt.kind {
-			StmtKind::Definition(name, typ, expr) => {
+			ExprKind::Definition(name, typ, expr) => {
 				let var_id = scope.len();
 				scope.insert(name.to_string(), self.get_type_from_name(typ)?);
 				let op = self.typecheck_expr(&scope, expr)?;
 				instrs.push(Instr { source: stmt.source, kind: InstrKind::Definition(var_id, op) });
 			}
-			StmtKind::Expression(expr) => {
-				instrs.push(Instr {
-					source: stmt.source,
-					kind: InstrKind::Operation(self.typecheck_expr(scope, expr)?),
-				});
-			}
-			StmtKind::Print(expr) => {
+			ExprKind::Print(expr) => {
 				instrs.push(Instr {
 					source: stmt.source,
 					kind: InstrKind::Print(self.typecheck_expr(scope, expr)?),
 				});
 			}
-			StmtKind::Println(expr) => {
+			ExprKind::Println(expr) => {
 				instrs.push(Instr {
 					source: stmt.source,
 					kind: InstrKind::Print(self.typecheck_expr(scope, expr)?),
@@ -109,7 +103,7 @@ impl<'a> Typechecker<'a> {
 					}),
 				});
 			}
-			StmtKind::Assignment(name, expr) => {
+			ExprKind::Assignment(name, expr) => {
 				let Some(var_id) = scope.get_index_of(*name) else {
 					return Err(TypeError {
 						location: *name,
@@ -119,8 +113,8 @@ impl<'a> Typechecker<'a> {
 				let op = self.typecheck_expr(&scope, expr)?;
 				instrs.push(Instr { source: stmt.source, kind: InstrKind::Assignment(var_id, op) });
 			}
-			StmtKind::If(expr, block, block1) => todo!(),
-			StmtKind::While(expr, block) => {
+			ExprKind::If(expr, block, block1) => todo!(),
+			ExprKind::While(expr, block) => {
 				let mut block_instrs = vec![];
 				for stmt in &block.stmts {
 					block_instrs.extend(self.typecheck_stmt(scope, stmt)?);
@@ -130,13 +124,19 @@ impl<'a> Typechecker<'a> {
 					kind: InstrKind::While(self.typecheck_expr(&scope, expr)?, block_instrs),
 				})
 			}
-			StmtKind::Return(expr) => instrs.push(Instr {
+			ExprKind::Return(expr) => instrs.push(Instr {
 				source: stmt.source,
 				kind: InstrKind::Return(self.typecheck_expr(&scope, expr)?),
 			}),
-			StmtKind::Function(_, vec, block) => todo!(),
-			StmtKind::Class(_, vec) => todo!(),
-			StmtKind::Import(_) => todo!(),
+			ExprKind::Function(_, vec, block) => todo!(),
+			ExprKind::Class(_, vec) => todo!(),
+			ExprKind::Import(_) => todo!(),
+			_ => {
+				instrs.push(Instr {
+					source: stmt.source,
+					kind: InstrKind::Operation(self.typecheck_expr(scope, stmt)?),
+				});
+			}
 		}
 		Ok(instrs)
 	}
@@ -188,6 +188,7 @@ impl<'a> Typechecker<'a> {
 				}
 				OpKind::Call(self.functions.get_index_of(fname).unwrap(), args)
 			}
+			_ => unreachable!(),
 		};
 		Ok(Op { source: expr.source, kind: op })
 	}

@@ -1,7 +1,5 @@
 use indexmap::IndexMap;
 
-use super::ast::Stmt;
-
 // TODO: rename to module
 #[derive(Debug)]
 pub struct Program<'a> {
