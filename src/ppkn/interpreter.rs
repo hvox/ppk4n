@@ -1,7 +1,7 @@
 #![allow(unused_variables)]
 use std::rc::Rc;
 
-use super::ir::{Instr, Op, Program, Type};
+use super::ir::{Instr, InstrKind, Program, Type};
 
 impl Program<'_> {
 	pub fn run(&self) {
@@ -26,17 +26,14 @@ impl Program<'_> {
 
 	fn exec_instr(&self, locals: &mut Vec<Value>, instr: &Instr) -> Option<Value> {
 		match &instr.kind {
-			super::ir::InstrKind::Operation(op) => {
-				self.eval_op(locals, &op);
-			}
-			super::ir::InstrKind::Definition(var_idx, op) => {
+			InstrKind::Definition(var_idx, op) => {
 				locals[*var_idx] = self.eval_op(locals, &op);
 			}
-			super::ir::InstrKind::Assignment(var_idx, op) => {
+			InstrKind::Assignment(var_idx, op) => {
 				locals[*var_idx] = self.eval_op(locals, &op);
 			}
-			super::ir::InstrKind::Return(expr) => return Some(self.eval_op(locals, expr)),
-			super::ir::InstrKind::While(condition, code) => {
+			InstrKind::Return(expr) => return Some(self.eval_op(locals, expr)),
+			InstrKind::While(condition, code) => {
 				while self.eval_op(locals, condition).is_true() {
 					for instr in code {
 						if let Some(result) = self.exec_instr(locals, instr) {
@@ -45,7 +42,7 @@ impl Program<'_> {
 					}
 				}
 			}
-			super::ir::InstrKind::Print(op) => {
+			InstrKind::Print(op) => {
 				let value = self.eval_op(locals, op);
 				match value {
 					Value::String(s) => print!("{}", s),
@@ -55,39 +52,43 @@ impl Program<'_> {
 					Value::None => {}
 				}
 			}
+			_ => {
+				self.eval_op(locals, instr);
+			}
 		}
 		None
 	}
 
-	fn eval_op(&self, locals: &mut Vec<Value>, op: &Op) -> Value {
+	fn eval_op(&self, locals: &mut Vec<Value>, op: &Instr) -> Value {
 		match &op.kind {
-			super::ir::OpKind::Integer(x) => Value::Int(*x),
-			super::ir::OpKind::Float(x) => Value::Float(*x),
-			super::ir::OpKind::Variable(x) => locals[*x].clone(),
-			super::ir::OpKind::String(x) => Value::String(x.to_string().into()),
-			super::ir::OpKind::Call(f, args) => {
+			InstrKind::Integer(x) => Value::Int(*x),
+			InstrKind::Float(x) => Value::Float(*x),
+			InstrKind::Variable(x) => locals[*x].clone(),
+			InstrKind::String(x) => Value::String(x.to_string().into()),
+			InstrKind::Call(f, args) => {
 				let mut arguments = Vec::with_capacity(args.len());
 				for arg in args {
 					arguments.push(self.eval_op(locals, arg));
 				}
 				self.exec_fn(*f, arguments).unwrap_or(Value::None)
 			}
-			super::ir::OpKind::AddI64(lhs, rhs) => Value::Int(
+			InstrKind::AddI64(lhs, rhs) => Value::Int(
 				self.eval_op(locals, lhs).integer() + self.eval_op(locals, rhs).integer(),
 			),
-			super::ir::OpKind::SubI64(lhs, rhs) => Value::Int(
+			InstrKind::SubI64(lhs, rhs) => Value::Int(
 				self.eval_op(locals, lhs).integer() - self.eval_op(locals, rhs).integer(),
 			),
-			super::ir::OpKind::MulI64(lhs, rhs) => Value::Int(
+			InstrKind::MulI64(lhs, rhs) => Value::Int(
 				self.eval_op(locals, lhs).integer() * self.eval_op(locals, rhs).integer(),
 			),
-			super::ir::OpKind::DivI64(lhs, rhs) => Value::Int(
+			InstrKind::DivI64(lhs, rhs) => Value::Int(
 				self.eval_op(locals, lhs).integer() / self.eval_op(locals, rhs).integer(),
 			),
-			super::ir::OpKind::AddF64(op, op1) => todo!(),
-			super::ir::OpKind::LessI64(lhs, rhs) => Value::Bool(
+			InstrKind::AddF64(op, op1) => todo!(),
+			InstrKind::LessI64(lhs, rhs) => Value::Bool(
 				self.eval_op(locals, lhs).integer() < self.eval_op(locals, rhs).integer(),
 			),
+			_ => unreachable!(),
 		}
 	}
 }

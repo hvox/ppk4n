@@ -29,35 +29,35 @@ impl<'a> Typechecker<'a> {
 	}
 
 	fn typecheck(mut self) -> Result<Program<'a>, TypeError<'a>> {
-		let mut signatures = IndexMap::new();
 		for stmt in &self.ast.stmts {
 			match &stmt.kind {
-				ExprKind::Function(name, arguments, _) => {
-					let mut arg_types = vec![];
-					for (_, typ) in arguments.iter() {
-						arg_types.push(self.get_type_from_name(typ)?);
+				ExprKind::Function(name, parameters, _) => {
+					let mut params = IndexMap::new();
+					for (name, typ) in parameters.iter() {
+						params.insert(name.to_string(), self.get_type_from_name(typ)?);
 					}
-					let typ = FnType::new(&arg_types, Type::Void);
-					signatures.insert(*name, typ);
+					let f = Function {
+						params,
+						result: Type::Void,
+						locals: IndexMap::new(),
+						code: vec![],
+					};
+					self.functions.insert(name.to_string(), f);
 				}
 				_ => unreachable!(),
 			}
 		}
 		for stmt in &self.ast.stmts {
 			match &stmt.kind {
-				ExprKind::Function(name, args, body) => {
-					let mut locals = IndexMap::new();
-					for (name, typ) in args {
-						locals.insert(name.to_string(), self.get_type_from_name(typ)?);
-					}
+				ExprKind::Function(name, _, body) => {
+					let func_id = self.functions.get_index_of(*name).unwrap();
+					let mut locals = self.functions[func_id].params.clone();
 					let mut instrs = vec![];
 					for stmt in &body.stmts {
 						instrs.extend(self.typecheck_stmt(&mut locals, stmt)?);
 					}
-					self.functions.insert(
-						name.to_string(),
-						Function { signature: signatures[name].clone(), locals, code: instrs },
-					);
+					self.functions[func_id].locals = locals;
+					self.functions[func_id].code = instrs;
 				}
 				_ => unreachable!(),
 			}
@@ -86,25 +86,28 @@ impl<'a> Typechecker<'a> {
 				let var_id = scope.len();
 				scope.insert(name.to_string(), self.get_type_from_name(typ)?);
 				let op = self.typecheck_expr(&scope, expr)?;
-				instrs.push(Instr { source: stmt.source, kind: InstrKind::Definition(var_id, op) });
+				instrs.push(Instr {
+					source: stmt.source,
+					kind: InstrKind::Definition(var_id, Box::new(op)),
+				});
 			}
 			ExprKind::Print(expr) => {
 				instrs.push(Instr {
 					source: stmt.source,
-					kind: InstrKind::Print(self.typecheck_expr(scope, expr)?),
+					kind: InstrKind::Print(Box::new(self.typecheck_expr(scope, expr)?)),
 				});
 			}
 			ExprKind::Println(expr) => {
 				instrs.push(Instr {
 					source: stmt.source,
-					kind: InstrKind::Print(self.typecheck_expr(scope, expr)?),
+					kind: InstrKind::Print(Box::new(self.typecheck_expr(scope, expr)?)),
 				});
 				instrs.push(Instr {
 					source: stmt.source,
-					kind: InstrKind::Print(Op {
+					kind: InstrKind::Print(Box::new(Instr {
 						source: stmt.source,
-						kind: OpKind::String("\n".to_string()),
-					}),
+						kind: InstrKind::String("\n".to_string()),
+					})),
 				});
 			}
 			ExprKind::Assignment(name, expr) => {
@@ -115,7 +118,10 @@ impl<'a> Typechecker<'a> {
 					});
 				};
 				let op = self.typecheck_expr(&scope, expr)?;
-				instrs.push(Instr { source: stmt.source, kind: InstrKind::Assignment(var_id, op) });
+				instrs.push(Instr {
+					source: stmt.source,
+					kind: InstrKind::Assignment(var_id, Box::new(op)),
+				});
 			}
 			ExprKind::If(expr, block, block1) => todo!(),
 			ExprKind::While(expr, block) => {
@@ -125,21 +131,21 @@ impl<'a> Typechecker<'a> {
 				}
 				instrs.push(Instr {
 					source: stmt.source,
-					kind: InstrKind::While(self.typecheck_expr(&scope, expr)?, block_instrs),
+					kind: InstrKind::While(
+						Box::new(self.typecheck_expr(&scope, expr)?),
+						block_instrs,
+					),
 				})
 			}
 			ExprKind::Return(expr) => instrs.push(Instr {
 				source: stmt.source,
-				kind: InstrKind::Return(self.typecheck_expr(&scope, expr)?),
+				kind: InstrKind::Return(Box::new(self.typecheck_expr(&scope, expr)?)),
 			}),
 			ExprKind::Function(_, vec, block) => todo!(),
 			ExprKind::Class(_, vec) => todo!(),
 			ExprKind::Import(_) => todo!(),
 			_ => {
-				instrs.push(Instr {
-					source: stmt.source,
-					kind: InstrKind::Operation(self.typecheck_expr(scope, stmt)?),
-				});
+				instrs.push(self.typecheck_expr(&scope, stmt)?);
 			}
 		}
 		Ok(instrs)
@@ -149,34 +155,34 @@ impl<'a> Typechecker<'a> {
 		&self,
 		scope: &IndexMap<String, Type>,
 		expr: &Expr<'a>,
-	) -> Result<Op<'a>, TypeError<'a>> {
-		let op = match &expr.kind {
-			ExprKind::Integer(number) => OpKind::Integer(*number as i64),
-			ExprKind::Float(number) => OpKind::Float(*number),
-			ExprKind::String(string) => OpKind::String(string.to_string()),
-			ExprKind::Variable(name) => OpKind::Variable(scope.get_index_of(&name[..]).unwrap()),
+	) -> Result<Instr<'a>, TypeError<'a>> {
+		let instr = match &expr.kind {
+			ExprKind::Integer(number) => InstrKind::Integer(*number as i64),
+			ExprKind::Float(number) => InstrKind::Float(*number),
+			ExprKind::String(string) => InstrKind::String(string.to_string()),
+			ExprKind::Variable(name) => InstrKind::Variable(scope.get_index_of(&name[..]).unwrap()),
 			ExprKind::Grouping(expr) => todo!(),
 			ExprKind::Unary(unary_op, expr) => todo!(),
 			ExprKind::Binary(lhs, bin_op, rhs) => match bin_op.kind {
-				BinOpKind::Minus => OpKind::SubI64(
+				BinOpKind::Minus => InstrKind::SubI64(
 					Box::new(self.typecheck_expr(scope, lhs)?),
 					Box::new(self.typecheck_expr(scope, rhs)?),
 				),
-				BinOpKind::Plus => OpKind::AddI64(
+				BinOpKind::Plus => InstrKind::AddI64(
 					Box::new(self.typecheck_expr(scope, lhs)?),
 					Box::new(self.typecheck_expr(scope, rhs)?),
 				),
-				BinOpKind::Slash => OpKind::DivI64(
+				BinOpKind::Slash => InstrKind::DivI64(
 					Box::new(self.typecheck_expr(scope, lhs)?),
 					Box::new(self.typecheck_expr(scope, rhs)?),
 				),
-				BinOpKind::Star => OpKind::MulI64(
+				BinOpKind::Star => InstrKind::MulI64(
 					Box::new(self.typecheck_expr(scope, lhs)?),
 					Box::new(self.typecheck_expr(scope, rhs)?),
 				),
 				BinOpKind::Greater => todo!(),
 				BinOpKind::GreaterEqual => todo!(),
-				BinOpKind::Less => OpKind::LessI64(
+				BinOpKind::Less => InstrKind::LessI64(
 					Box::new(self.typecheck_expr(scope, lhs)?),
 					Box::new(self.typecheck_expr(scope, rhs)?),
 				),
@@ -190,10 +196,10 @@ impl<'a> Typechecker<'a> {
 				for arg in arguments {
 					args.push(self.typecheck_expr(scope, arg)?);
 				}
-				OpKind::Call(self.functions.get_index_of(fname).unwrap(), args)
+				InstrKind::Call(self.functions.get_index_of(fname).unwrap(), args)
 			}
 			_ => unreachable!(),
 		};
-		Ok(Op { source: expr.source, kind: op })
+		Ok(Instr { source: expr.source, kind: instr })
 	}
 }

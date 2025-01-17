@@ -10,15 +10,10 @@ pub struct Program<'a> {
 
 #[derive(Debug)]
 pub struct Function<'a> {
-	pub signature: FnType,
+	pub params: IndexMap<String, Type>,
+	pub result: Type,
 	pub locals: IndexMap<String, Type>,
 	pub code: Vec<Instr<'a>>, // body
-}
-
-#[derive(Clone, Debug)]
-pub struct FnType {
-	pub arguments: Box<[Type]>,
-	pub result: Type,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -37,37 +32,21 @@ pub struct Instr<'a> {
 
 #[derive(Clone, Debug)]
 pub enum InstrKind<'a> {
-	Definition(usize, Op<'a>),
-	Assignment(usize, Op<'a>),
-	Operation(Op<'a>),
-	Return(Op<'a>),
-	While(Op<'a>, Vec<Instr<'a>>),
-	Print(Op<'a>),
-}
+	Definition(usize, Box<Instr<'a>>),
+	Assignment(usize, Box<Instr<'a>>),
+	Return(Box<Instr<'a>>),
+	While(Box<Instr<'a>>, Vec<Instr<'a>>),
+	Print(Box<Instr<'a>>),
 
-#[derive(Clone, Debug)]
-pub struct Op<'a> {
-	pub source: &'a str,
-	pub kind: OpKind<'a>,
-}
-
-#[derive(Clone, Debug)]
-pub enum OpKind<'a> {
 	Integer(i64),
 	Float(f64),
 	Variable(usize),
 	String(String),
-	Call(usize, Vec<Op<'a>>),
-	AddI64(Box<Op<'a>>, Box<Op<'a>>),
-	SubI64(Box<Op<'a>>, Box<Op<'a>>),
-	MulI64(Box<Op<'a>>, Box<Op<'a>>),
-	DivI64(Box<Op<'a>>, Box<Op<'a>>),
-	AddF64(Box<Op<'a>>, Box<Op<'a>>),
-	LessI64(Box<Op<'a>>, Box<Op<'a>>),
-}
-
-impl FnType {
-	pub fn new(arguments: &[Type], result: Type) -> Self {
-		Self { arguments: arguments.into(), result }
-	}
+	Call(usize, Vec<Instr<'a>>),
+	AddI64(Box<Instr<'a>>, Box<Instr<'a>>),
+	SubI64(Box<Instr<'a>>, Box<Instr<'a>>),
+	MulI64(Box<Instr<'a>>, Box<Instr<'a>>),
+	DivI64(Box<Instr<'a>>, Box<Instr<'a>>),
+	AddF64(Box<Instr<'a>>, Box<Instr<'a>>),
+	LessI64(Box<Instr<'a>>, Box<Instr<'a>>),
 }
