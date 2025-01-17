@@ -1,6 +1,6 @@
 use std::{env::args, fs, process::exit};
 
-use ppkn::parse;
+use ppkn::run;
 
 mod ppkn;
 
@@ -8,7 +8,7 @@ fn main() {
 	let args: Vec<_> = args().collect();
 	let source = fs::read_to_string(&args[1]).unwrap();
 
-	let program = match parse(&source) {
+	match run(&source) {
 		Ok(program) => program,
 		Err(error) => {
 			let (row, column, line) = find_line_with(&source, &error.location);
@@ -18,9 +18,6 @@ fn main() {
 			exit(1);
 		}
 	};
-
-	// println!("{:#?}", program);
-	program.run();
 }
 
 fn find_line_with<'a>(text: &'a str, content: &str) -> (usize, usize, &'a str) {
