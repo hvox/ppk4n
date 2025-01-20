@@ -146,7 +146,15 @@ impl<'a, 'b> FunctionTypechecker<'a, 'b> {
 			ExprKind::Return(expr) => todo!(),
 			ExprKind::Variable(_) => todo!(),
 			ExprKind::Grouping(expr) => todo!(),
-			ExprKind::FunctionCall(expr, vec) => todo!(),
+			ExprKind::FunctionCall(name, params) => {
+				Call(self.typechecker.signatures.get_index_of(name).unwrap(), {
+					let mut typed_params = vec![];
+					for param in params {
+						typed_params.push(self.typecheck_expr(param)?);
+					}
+					typed_params
+				})
+			}
 			_ => unreachable!(),
 		};
 		Ok(InstrCntrl { source, kind: Box::new(kind) })
@@ -285,7 +293,11 @@ impl<'a, 'b> FunctionTypechecker<'a, 'b> {
 						})?;
 						self.types.merge(t, lhs_type).unwrap();
 					}
-					ExprKind::FunctionCall(expr, vec) => todo!(),
+					ExprKind::FunctionCall(name, args) => {
+						let typ = self.typechecker.signatures[*name].result;
+						let expected_typ = self.types.add_type(typ);
+						self.types.merge(t, expected_typ).unwrap()
+					}
 					_ => unreachable!(),
 				})
 			})?

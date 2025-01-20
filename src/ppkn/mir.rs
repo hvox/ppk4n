@@ -183,6 +183,7 @@ pub struct InstrCntrl<'a> {
 
 #[derive(Clone, Debug)]
 pub enum InstrKindCntrl<'a> {
+	Call(usize, Vec<Instr<'a>>),
 	DefI64(usize, InstrI64<'a>),
 	DefU64(usize, InstrU64<'a>),
 	DefF64(usize, InstrF64<'a>),

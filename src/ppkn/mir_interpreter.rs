@@ -38,6 +38,13 @@ impl<'a> Program<'a> {
 
 	fn eval_unit(&self, locals: &mut Vec<u64>, instr: &InstrCntrl) -> Result<(), Interruption<'a>> {
 		Ok(match &*instr.kind {
+			InstrKindCntrl::Call(f, params) => {
+				let mut args = vec![];
+				for param in params {
+					args.push(self.eval_instr(locals, param)?);
+				}
+				self.eval_fn(*f, args).map_err(|err| Interruption { result: Err(err) })?;
+			}
 			InstrKindCntrl::DefI64(id, value) | InstrKindCntrl::SetI64(id, value) => {
 				locals[*id] = unsafe { transmute(self.eval_i64(locals, value)?) }
 			}
@@ -89,6 +96,21 @@ impl<'a> Program<'a> {
 			Value(value) => value.clone(),
 			Call(_) => todo!(),
 			CastI64(instr) => self.eval_i64(locals, instr)?.to_string().into(),
+		})
+	}
+
+	fn eval_instr(&self, locals: &mut Vec<u64>, instr: &Instr) -> Result<u64, Interruption<'a>> {
+		use InstrKindStr::*;
+		Ok(match &instr.kind {
+			InstrKind::Cntrl(instr) => {
+				self.eval_unit(locals, instr)?;
+				0
+			}
+			InstrKind::Bool(instr_bool) => todo!(),
+			InstrKind::I64(instr) => self.eval_i64(locals, instr)? as u64,
+			InstrKind::U64(instr_u64) => todo!(),
+			InstrKind::F64(instr_f64) => todo!(),
+			InstrKind::Str(instr) => self.eval_str(locals, instr)?.as_ptr() as u64,
 		})
 	}
 }
