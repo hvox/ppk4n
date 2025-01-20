@@ -65,17 +65,17 @@ impl<'a> Program<'a> {
 		use InstrKindI64::*;
 		Ok(match &*instr.kind {
 			Add(lhs, rhs) => self.eval_i64(locals, lhs)? + self.eval_i64(locals, rhs)?,
-			Sub(instr_i64, instr_i65) => todo!(),
-			Mult(instr_i64, instr_i65) => todo!(),
-			Div(instr_i64, instr_i65) => todo!(),
-			Rem(instr_i64, instr_i65) => todo!(),
-			And(instr_i64, instr_i65) => todo!(),
-			Xor(instr_i64, instr_i65) => todo!(),
-			Or(instr_i64, instr_i65) => todo!(),
+			Sub(lhs, rhs) => self.eval_i64(locals, lhs)? - self.eval_i64(locals, rhs)?,
+			Mult(lhs, rhs) => self.eval_i64(locals, lhs)? * self.eval_i64(locals, rhs)?,
+			Div(lhs, rhs) => self.eval_i64(locals, lhs)? / self.eval_i64(locals, rhs)?,
+			Rem(lhs, rhs) => self.eval_i64(locals, lhs)? % self.eval_i64(locals, rhs)?,
+			And(lhs, rhs) => self.eval_i64(locals, lhs)? & self.eval_i64(locals, rhs)?,
+			Xor(lhs, rhs) => self.eval_i64(locals, lhs)? ^ self.eval_i64(locals, rhs)?,
+			Or(lhs, rhs) => self.eval_i64(locals, lhs)? | self.eval_i64(locals, rhs)?,
 			Return(instr) => todo!(),
-			Variable(_) => todo!(),
+			Variable(idx) => unsafe { transmute(locals[*idx]) },
 			Call(_) => todo!(),
-			Value(_) => todo!(),
+			Value(val) => *val,
 		})
 	}
 
