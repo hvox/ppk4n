@@ -3,6 +3,7 @@ use std::{env::args, fs, process::exit};
 use ppkn::run;
 
 mod ppkn;
+mod utils;
 
 fn main() {
 	let args: Vec<_> = args().collect();
