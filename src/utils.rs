@@ -2,7 +2,7 @@
 use indexmap::IndexMap;
 use std::{cell::Cell, hash::Hash, mem::swap, ops::Index};
 
-pub fn try_map<T, R, E>(xs: impl IntoIterator<Item = T>, f: impl Fn(T) -> Result<R, E>) -> Result<Vec<R>, E> {
+pub fn try_map<T, R, E>(xs: impl IntoIterator<Item = T>, f: impl FnMut(T) -> Result<R, E>) -> Result<Vec<R>, E> {
 	Ok(xs.into_iter().map(f).collect::<Result<_, _>>()?)
 }
 

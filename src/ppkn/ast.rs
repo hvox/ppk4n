@@ -1,5 +1,7 @@
 use std::ops::Deref;
 
+use crate::utils::try_map;
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct Block<'a, T> {
 	pub source: &'a str,
@@ -10,7 +12,7 @@ pub struct Block<'a, T> {
 pub struct Expr<'a, T> {
 	pub source: &'a str,
 	pub kind: ExprKind<'a, T>,
-	pub additional_data: T,
+	pub annotations: T,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -76,11 +78,144 @@ impl<'a> Expr<'a, ()> {
 	pub fn new(source: &'a str, kind: ExprKind<'a, ()>) -> Self {
 		Self::from(source, kind, ())
 	}
+
+	pub fn add_annotations<F, R>(self, mut f: F) -> Expr<'a, R>
+	where
+		F: FnMut() -> R,
+	{
+		self.map_annotations(&mut |_, _| f())
+	}
 }
 
 impl<'a, T> Expr<'a, T> {
 	pub fn from(source: &'a str, kind: ExprKind<'a, T>, data: T) -> Self {
-		Self { source, kind, additional_data: data }
+		Self { source, kind, annotations: data }
+	}
+
+	pub fn map_annotations<F, R>(self, f: &mut F) -> Expr<'a, R>
+	where
+		F: FnMut(T, &ExprKind<'a, R>) -> R,
+	{
+		let kind = self.kind.map_annotations(f);
+		let annotations = f(self.annotations, &kind);
+		Expr { source: self.source, kind, annotations }
+	}
+
+	pub fn try_map_annotations<F, R, E>(self, f: &mut F) -> Result<Expr<'a, R>, E>
+	where
+		F: FnMut(T, &ExprKind<'a, R>) -> Result<R, E>,
+	{
+		let kind = self.kind.try_map_annotations(f)?;
+		let annotations = f(self.annotations, &kind)?;
+		Ok(Expr { source: self.source, kind, annotations })
+	}
+
+	pub fn try_foreach<F, E>(self, f: &mut F) -> Result<Self, E>
+	where
+		F: FnMut(T, &ExprKind<'a, T>) -> Result<(), E>,
+		T: Clone,
+	{
+		self.try_map_annotations(&mut |x, kind| {
+			f(x.clone(), kind)?;
+			Ok(x)
+		})
+	}
+}
+
+impl<'a, T> ExprKind<'a, T> {
+	pub fn map_annotations<F, R>(self, f: &mut F) -> ExprKind<'a, R>
+	where
+		F: FnMut(T, &ExprKind<'a, R>) -> R,
+	{
+		use ExprKind::*;
+		match self {
+			Print(expr) => Print(Box::new(expr.map_annotations(f))),
+			Println(expr) => Println(Box::new(expr.map_annotations(f))),
+			Definition(var, typ, expr) => Definition(var, typ, Box::new(expr.map_annotations(f))),
+			Assignment(var, expr) => Assignment(var, Box::new(expr.map_annotations(f))),
+			If(expr, then, otherwise) => If(
+				Box::new(expr.map_annotations(f)),
+				Block {
+					source: then.source,
+					stmts: then.stmts.into_iter().map(|stmt| stmt.map_annotations(f)).collect(),
+				},
+				otherwise.map(|block| Block {
+					source: block.source,
+					stmts: block.stmts.into_iter().map(|stmt| stmt.map_annotations(f)).collect(),
+				}),
+			),
+			While(expr, block) => While(
+				Box::new(expr.map_annotations(f)),
+				Block {
+					source: block.source,
+					stmts: block.stmts.into_iter().map(|stmt| stmt.map_annotations(f)).collect(),
+				},
+			),
+			Return(expr) => Return(Box::new(expr.map_annotations(f))),
+			Grouping(expr) => Grouping(Box::new(expr.map_annotations(f))),
+			Unary(op, expr) => Unary(op, Box::new(expr.map_annotations(f))),
+			Binary(lhs, op, rhs) => {
+				Binary(Box::new(lhs.map_annotations(f)), op, Box::new(rhs.map_annotations(f)))
+			}
+			FunctionCall(expr, args) => FunctionCall(
+				Box::new(expr.map_annotations(f)),
+				args.into_iter().map(|stmt| stmt.map_annotations(f)).collect(),
+			),
+			Variable(x) => Variable(x),
+			Integer(x) => Integer(x),
+			String(x) => String(x),
+			Float(x) => Float(x),
+			_ => unreachable!(),
+		}
+	}
+
+	pub fn try_map_annotations<F, R, E>(self, f: &mut F) -> Result<ExprKind<'a, R>, E>
+	where
+		F: FnMut(T, &ExprKind<'a, R>) -> Result<R, E>,
+	{
+		use ExprKind::*;
+		Ok(match self {
+			Print(expr) => Print(Box::new(expr.try_map_annotations(f)?)),
+			Println(expr) => Println(Box::new(expr.try_map_annotations(f)?)),
+			Definition(var, typ, expr) => Definition(var, typ, Box::new(expr.try_map_annotations(f)?)),
+			Assignment(var, expr) => Assignment(var, Box::new(expr.try_map_annotations(f)?)),
+			If(expr, then, otherwise) => If(
+				Box::new(expr.try_map_annotations(f)?),
+				Block {
+					source: then.source,
+					stmts: try_map(then.stmts, |stmt| Ok(stmt.try_map_annotations(f)?))?,
+				},
+				match otherwise {
+					Some(block) => Some(Block {
+						source: block.source,
+						stmts: try_map(block.stmts, |stmt| Ok(stmt.try_map_annotations(f)?))?,
+					}),
+					None => None,
+				},
+			),
+			While(expr, block) => While(
+				Box::new(expr.try_map_annotations(f)?),
+				Block {
+					source: block.source,
+					stmts: try_map(block.stmts, |stmt| Ok(stmt.try_map_annotations(f)?))?,
+				},
+			),
+			Return(expr) => Return(Box::new(expr.try_map_annotations(f)?)),
+			Grouping(expr) => Grouping(Box::new(expr.try_map_annotations(f)?)),
+			Unary(op, expr) => Unary(op, Box::new(expr.try_map_annotations(f)?)),
+			Binary(lhs, op, rhs) => {
+				Binary(Box::new(lhs.try_map_annotations(f)?), op, Box::new(rhs.try_map_annotations(f)?))
+			}
+			FunctionCall(expr, args) => FunctionCall(
+				Box::new(expr.try_map_annotations(f)?),
+				try_map(args, |arg| Ok(arg.try_map_annotations(f)?))?,
+			),
+			Variable(x) => Variable(x),
+			Integer(x) => Integer(x),
+			String(x) => String(x),
+			Float(x) => Float(x),
+			_ => unreachable!(),
+		})
 	}
 }
 
@@ -88,7 +223,7 @@ impl<'a, T> Deref for Expr<'a, T> {
 	type Target = T;
 
 	fn deref(&self) -> &Self::Target {
-		&self.additional_data
+		&self.annotations
 	}
 }
 
