@@ -1,3 +1,5 @@
+use std::ops::Deref;
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct Block<'a, T> {
 	pub source: &'a str,
@@ -72,7 +74,21 @@ pub type Typename<'a> = &'a str;
 
 impl<'a> Expr<'a, ()> {
 	pub fn new(source: &'a str, kind: ExprKind<'a, ()>) -> Self {
-		Self { source, kind, additional_data: () }
+		Self::from(source, kind, ())
+	}
+}
+
+impl<'a, T> Expr<'a, T> {
+	pub fn from(source: &'a str, kind: ExprKind<'a, T>, data: T) -> Self {
+		Self { source, kind, additional_data: data }
+	}
+}
+
+impl<'a, T> Deref for Expr<'a, T> {
+	type Target = T;
+
+	fn deref(&self) -> &Self::Target {
+		&self.additional_data
 	}
 }
 

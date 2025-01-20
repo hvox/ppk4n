@@ -7,6 +7,7 @@ pub mod ir;
 pub mod interpreter;
 
 use ir::Program;
+pub mod mir_generator;
 pub mod mir;
 
 pub struct PpknError<'a> {
