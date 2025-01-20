@@ -1,0 +1,92 @@
+#!/usr/bin/env python3
+"""
+Generate type definitions for src/ppkn/ast.rs
+
+Usage: {script} [options]
+
+Options:
+    -h, --help
+        Show this screen and exit.
+"""
+import sys
+from contextlib import suppress
+from pathlib import Path
+
+
+LANGUAGE = {
+    "program": ["statement"],
+    "statement": ["expression", "pass"],
+    # "expression": ["assign", "binary"],
+    # "assign": ("name", "value: expression"),
+    "expression": ["variable", "binary"],
+    "binary": ("left: expression", "operation", "right: expression"),
+}
+
+
+def emit_definitions():
+    for name, content in LANGUAGE.items():
+        match content:
+            case [item]:
+                emit_struct_definition(name, ([item],))
+            case list(options):
+                emit_enum_definition(name, options)
+            case tuple(fields):
+                emit_struct_definition(name, fields)
+
+
+def emit_struct_definition(name: str, fields: tuple):
+    print("#[derive(Clone, Debug, PartialEq)]")
+    print(f"pub struct {camelcase(name)}<'a>", "{\n\tpub source: &'a str,")
+    for field in fields:
+        match field:
+            case [name]:
+                print(f"\tpub {name}s: Vec<{typename(name)}>,")
+            case str(field):
+                name, typ = field.split(": ") if ":" in field else (field, field)
+                print(f"\tpub {name}: {typename(typ)},")
+            case field:
+                raise Exception(f"Field {field!r}?")
+    print("}\n")
+
+
+def emit_enum_definition(name: str, options: tuple):
+    print("#[derive(Clone, Debug, PartialEq)]")
+    print(f"pub struct {camelcase(name)}<'a>", "{\n\tpub source: &'a str,")
+    print(f"\tkind: {camelcase(name)}Kind<'a>,")
+    print("}\n")
+
+    print("#[derive(Clone, Debug, PartialEq)]")
+    print(f"pub enum {camelcase(name)}Kind<'a>", "{")
+    for option in options:
+        assert isinstance(option, str) and ":" not in option
+        name = typ = option
+        print(f"\t{camelcase(name)}({boxed(typ)}),")
+    print("}\n")
+
+
+def boxed(name: str):
+    if name in LANGUAGE:
+        return f"Box<{typename(name)}>"
+    return "&'a str"
+
+
+def typename(name: str):
+    if name in LANGUAGE:
+        return camelcase(name) + "<'a>"
+    return "&'a str"
+
+
+def camelcase(name: str) -> str:
+    words = name.replace("_", " ").split()
+    return "".join(word.capitalize() for word in words)
+
+
+def main(script_name: str, *script_args: str):
+    doc = __doc__.format(script=Path(script_name).name)
+    __import__("docopt").docopt(doc, script_args)
+    emit_definitions()
+
+
+if __name__ == "__main__":
+    with suppress(KeyboardInterrupt):
+        main(sys.argv[0], *sys.argv[1:])
