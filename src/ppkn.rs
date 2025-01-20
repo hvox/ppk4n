@@ -9,6 +9,7 @@ pub mod interpreter;
 use ir::Program;
 pub mod mir_generator;
 pub mod mir;
+pub mod mir_interpreter;
 
 pub struct PpknError<'a> {
 	pub typ: &'static str,
