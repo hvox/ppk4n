@@ -7,6 +7,7 @@ pub mod ir;
 pub mod interpreter;
 
 use ir::Program;
+pub mod mir;
 
 pub struct PpknError<'a> {
 	pub typ: &'static str,
