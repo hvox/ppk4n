@@ -6,10 +6,11 @@ pub mod typechecker;
 pub mod ir;
 pub mod interpreter;
 
-use ir::Program;
 pub mod mir_generator;
 pub mod mir;
 pub mod mir_interpreter;
+
+use mir::Program;
 
 pub struct PpknError<'a> {
 	pub typ: &'static str,
@@ -20,18 +21,19 @@ pub struct PpknError<'a> {
 pub fn parse(source: &str) -> Result<Program, PpknError> {
 	let tokens = tokenizer::tokenize(source);
 	let ast = parser::parse(tokens)?;
-	let program = typechecker::typecheck(ast)?;
+	let program = mir_generator::typecheck(ast)?;
 	Ok(program)
 }
 
 pub fn run(source: &str) -> Result<(), PpknError> {
 	let program = parse(source)?;
+	// for f in &program.functions { println!("{:?}", f); }
 	program.run()?;
 	Ok(())
 }
 
-impl<'a> From<typechecker::TypeError<'a>> for PpknError<'a> {
-	fn from(error: typechecker::TypeError<'a>) -> Self {
+impl<'a> From<mir_generator::TypeError<'a>> for PpknError<'a> {
+	fn from(error: mir_generator::TypeError<'a>) -> Self {
 		Self { typ: "TypeError", message: error.message, location: error.location }
 	}
 }
@@ -42,8 +44,8 @@ impl<'a> From<parser::SyntaxError<'a>> for PpknError<'a> {
 	}
 }
 
-impl<'a> From<interpreter::RuntimeError<'a>> for PpknError<'a> {
-	fn from(error: interpreter::RuntimeError<'a>) -> Self {
+impl<'a> From<mir_interpreter::RuntimeError<'a>> for PpknError<'a> {
+	fn from(error: mir_interpreter::RuntimeError<'a>) -> Self {
 		Self { typ: "RuntimeError", message: error.message, location: error.location }
 	}
 }
