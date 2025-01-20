@@ -356,6 +356,9 @@ impl TypesDsu {
 	fn merge(&mut self, u: TypeId, v: TypeId) -> Result<(), (Type, Type)> {
 		let u = self.resolve_leader(u);
 		let v = self.resolve_leader(v);
+		if u == v {
+			return Ok(())
+		}
 		let t1 = self.types.remove(&(u as u32)).unwrap();
 		let t2 = self.types.remove(&(v as u32)).unwrap();
 		let union_type = match (t1, t2) {
