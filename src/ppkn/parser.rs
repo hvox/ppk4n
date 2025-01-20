@@ -372,7 +372,7 @@ impl<'a> Parser<'a> {
 		})?;
 		return Ok(Expr::new(
 			span(self.tokens[start_position].source, end.source),
-			ExprKind::FunctionCall(Box::new(function), args),
+			ExprKind::FunctionCall(function.source, args),
 		));
 	}
 

@@ -190,13 +190,12 @@ impl<'a> Typechecker<'a> {
 				BinOpKind::BangEqual => todo!(),
 				BinOpKind::EqualEqual => todo!(),
 			},
-			ExprKind::FunctionCall(func, arguments) => {
-				let fname = func.source;
+			ExprKind::FunctionCall(fname, arguments) => {
 				let mut args = vec![];
 				for arg in arguments {
 					args.push(self.typecheck_expr(scope, arg)?);
 				}
-				InstrKind::Call(self.functions.get_index_of(fname).unwrap(), args)
+				InstrKind::Call(self.functions.get_index_of(*fname).unwrap(), args)
 			}
 			_ => unreachable!(),
 		};

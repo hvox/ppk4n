@@ -36,7 +36,7 @@ pub enum ExprKind<'a, T> {
 	Grouping(Box<Expr<'a, T>>),
 	Unary(UnaryOp<'a>, Box<Expr<'a, T>>),
 	Binary(Box<Expr<'a, T>>, BinOp<'a>, Box<Expr<'a, T>>),
-	FunctionCall(Box<Expr<'a, T>>, Vec<Expr<'a, T>>),
+	FunctionCall(Identifier<'a>, Vec<Expr<'a, T>>),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -157,10 +157,9 @@ impl<'a, T> ExprKind<'a, T> {
 			Binary(lhs, op, rhs) => {
 				Binary(Box::new(lhs.map_annotations(f)), op, Box::new(rhs.map_annotations(f)))
 			}
-			FunctionCall(expr, args) => FunctionCall(
-				Box::new(expr.map_annotations(f)),
-				args.into_iter().map(|stmt| stmt.map_annotations(f)).collect(),
-			),
+			FunctionCall(name, args) => {
+				FunctionCall(name, args.into_iter().map(|stmt| stmt.map_annotations(f)).collect())
+			}
 			Variable(x) => Variable(x),
 			Integer(x) => Integer(x),
 			String(x) => String(x),
@@ -206,10 +205,9 @@ impl<'a, T> ExprKind<'a, T> {
 			Binary(lhs, op, rhs) => {
 				Binary(Box::new(lhs.try_map_annotations(f)?), op, Box::new(rhs.try_map_annotations(f)?))
 			}
-			FunctionCall(expr, args) => FunctionCall(
-				Box::new(expr.try_map_annotations(f)?),
-				try_map(args, |arg| Ok(arg.try_map_annotations(f)?))?,
-			),
+			FunctionCall(name, args) => {
+				FunctionCall(name, try_map(args, |arg| Ok(arg.try_map_annotations(f)?))?)
+			}
 			Variable(x) => Variable(x),
 			Integer(x) => Integer(x),
 			String(x) => String(x),
