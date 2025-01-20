@@ -127,39 +127,18 @@ impl<'a, 'b> FunctionTypechecker<'a, 'b> {
 		expr: Expr<'a, ExprDataWithTypeId>,
 	) -> Result<InstrCntrl<'a>, TypeError<'a>> {
 		let source = expr.source;
+		use InstrKindCntrl::*;
 		let kind = match expr.kind {
-			ExprKind::Print(expr) => todo!(),
-			ExprKind::Println(expr) => InstrKindCntrl::Block(vec![
-				InstrCntrl {
-					source,
-					kind: Box::new(InstrKindCntrl::PrintStr(match self.typecheck_expr(*expr)?.kind {
-						InstrKind::Cntrl(instr_cntrl) => todo!(),
-						InstrKind::Bool(instr_bool) => todo!(),
-						InstrKind::I64(instr_i64) => InstrStr {
-							source: instr_i64.source,
-							kind: Box::new(InstrKindStr::CastI64(instr_i64)),
-						},
-						InstrKind::U64(instr_u64) => todo!(),
-						InstrKind::F64(instr_f64) => todo!(),
-						InstrKind::Str(instr_str) => instr_str,
-					})),
-				},
-				InstrCntrl {
-					source,
-					kind: Box::new(InstrKindCntrl::PrintStr(InstrStr {
-						source,
-						kind: Box::new(InstrKindStr::Value("\n".into())),
-					})),
-				},
-			]),
+			ExprKind::Print(expr) => PrintStr(converted_to_str(self.typecheck_expr(*expr)?)),
+			ExprKind::Println(expr) => PrintlnStr(converted_to_str(self.typecheck_expr(*expr)?)),
 			ExprKind::Assignment(name, expr) | ExprKind::Definition(name, _, expr) => {
 				match self.types[expr.type_id].unwrap() {
-					Type::Unit => InstrKindCntrl::Drop(self.typecheck_expr(*expr)?),
-					Type::Bool => InstrKindCntrl::SetBool(self.scope[name], self.typecheck_bool(*expr)?),
-					Type::I64 => InstrKindCntrl::SetI64(self.scope[name], self.typecheck_i64(*expr)?),
-					Type::U64 => InstrKindCntrl::SetU64(self.scope[name], self.typecheck_u64(*expr)?),
-					Type::F64 => InstrKindCntrl::SetF64(self.scope[name], self.typecheck_f64(*expr)?),
-					Type::Str => InstrKindCntrl::SetStr(self.scope[name], self.typecheck_str(*expr)?),
+					Type::Unit => Drop(self.typecheck_expr(*expr)?),
+					Type::Bool => SetBool(self.scope[name], self.typecheck_bool(*expr)?),
+					Type::I64 => SetI64(self.scope[name], self.typecheck_i64(*expr)?),
+					Type::U64 => SetU64(self.scope[name], self.typecheck_u64(*expr)?),
+					Type::F64 => SetF64(self.scope[name], self.typecheck_f64(*expr)?),
+					Type::Str => SetStr(self.scope[name], self.typecheck_str(*expr)?),
 				}
 			}
 			ExprKind::If(expr, block, block1) => todo!(),
@@ -421,4 +400,17 @@ impl IndexMut<TypeId> for TypesDsu {
 	fn index_mut(&mut self, index: TypeId) -> &mut Self::Output {
 		self.types.get_mut(&(self.resolve_leader(index) as u32)).unwrap()
 	}
+}
+
+fn converted_to_str(anything: Instr) -> InstrStr {
+	use InstrKind::*;
+	let kind = match anything.kind {
+		Cntrl(instr_cntrl) => todo!(),
+		Bool(instr_bool) => todo!(),
+		I64(instr_i64) => InstrKindStr::CastI64(instr_i64),
+		U64(instr_u64) => todo!(),
+		F64(instr_f64) => todo!(),
+		Str(instr_str) => *instr_str.kind,
+	};
+	InstrStr { source: anything.source, kind: Box::new(kind) }
 }

@@ -194,6 +194,7 @@ pub enum InstrKindCntrl<'a> {
 	SetStr(usize, InstrStr<'a>),
 	SetBool(usize, InstrBool<'a>),
 	PrintStr(InstrStr<'a>),
+	PrintlnStr(InstrStr<'a>),
 	While(InstrBool<'a>, Vec<InstrCntrl<'a>>),
 	Block(Vec<InstrCntrl<'a>>),
 	Return(Instr<'a>),

@@ -50,6 +50,7 @@ impl<'a> Program<'a> {
 			InstrKindCntrl::SetStr(_, instr_str) => todo!(),
 			InstrKindCntrl::SetBool(_, instr_bool) => todo!(),
 			InstrKindCntrl::PrintStr(value) => print!("{}", self.eval_str(locals, value)?),
+			InstrKindCntrl::PrintlnStr(value) => println!("{}", self.eval_str(locals, value)?),
 			InstrKindCntrl::While(instr_bool, vec) => todo!(),
 			InstrKindCntrl::Block(stmts) => {
 				for stmt in stmts {
