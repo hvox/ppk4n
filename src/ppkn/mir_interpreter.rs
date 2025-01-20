@@ -87,6 +87,7 @@ impl<'a> Program<'a> {
 			Variable(_) => todo!(),
 			Value(value) => value.clone(),
 			Call(_) => todo!(),
+			CastI64(instr) => self.eval_i64(locals, instr)?.to_string().into(),
 		})
 	}
 }
