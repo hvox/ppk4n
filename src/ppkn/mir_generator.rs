@@ -135,7 +135,10 @@ impl<'a, 'b> FunctionTypechecker<'a, 'b> {
 					kind: Box::new(InstrKindCntrl::PrintStr(match self.typecheck_expr(*expr)?.kind {
 						InstrKind::Cntrl(instr_cntrl) => todo!(),
 						InstrKind::Bool(instr_bool) => todo!(),
-						InstrKind::I64(instr_i64) => todo!(),
+						InstrKind::I64(instr_i64) => InstrStr {
+							source: instr_i64.source,
+							kind: Box::new(InstrKindStr::CastI64(instr_i64)),
+						},
 						InstrKind::U64(instr_u64) => todo!(),
 						InstrKind::F64(instr_f64) => todo!(),
 						InstrKind::Str(instr_str) => instr_str,
@@ -195,9 +198,22 @@ impl<'a, 'b> FunctionTypechecker<'a, 'b> {
 	}
 
 	fn typecheck_i64(&mut self, expr: Expr<'a, ExprDataWithTypeId>) -> Result<InstrI64<'a>, TypeError<'a>> {
+		use InstrKindI64::*;
 		let source = expr.source;
 		let kind = match expr.kind {
-			_ => todo!(),
+			ExprKind::Integer(value) => Value(value as i64),
+			ExprKind::Variable(name) => Variable(self.scope[&name[..]]),
+			ExprKind::Grouping(expr) => *self.typecheck_i64(*expr)?.kind,
+			ExprKind::Unary(unary_op, expr) => todo!(),
+			ExprKind::Binary(lhs, op, rhs) => match op.kind {
+				BinOpKind::Minus => Sub(self.typecheck_i64(*lhs)?, self.typecheck_i64(*rhs)?),
+				BinOpKind::Plus => Add(self.typecheck_i64(*lhs)?, self.typecheck_i64(*rhs)?),
+				BinOpKind::Slash => Div(self.typecheck_i64(*lhs)?, self.typecheck_i64(*rhs)?),
+				BinOpKind::Star => Mult(self.typecheck_i64(*lhs)?, self.typecheck_i64(*rhs)?),
+				_ => unreachable!(),
+			},
+			ExprKind::FunctionCall(expr, vec) => todo!(),
+			_ => unreachable!(),
 		};
 		Ok(InstrI64 { source, kind: Box::new(kind) })
 	}
@@ -228,7 +244,7 @@ impl<'a, 'b> FunctionTypechecker<'a, 'b> {
 		let kind = match self.types[expr.type_id].unwrap() {
 			Type::Unit => InstrKind::Cntrl(self.typecheck_stmt(expr)?),
 			Type::Bool => todo!(),
-			Type::I64 => todo!(),
+			Type::I64 => InstrKind::I64(self.typecheck_i64(expr)?),
 			Type::U64 => todo!(),
 			Type::F64 => todo!(),
 			Type::Str => InstrKind::Str(self.typecheck_str(expr)?),
@@ -237,70 +253,65 @@ impl<'a, 'b> FunctionTypechecker<'a, 'b> {
 	}
 
 	fn annotate(&mut self, expr: Expr<'a, ()>) -> Result<Expr<'a, ExprDataWithTypeId>, TypeError<'a>> {
-		use ExprKind::*;
-		let mut type_id = self.types.new_type();
-		let source = expr.source;
-		let kind = match expr.kind {
-			Print(expr) => {
-				self.types[type_id] = Some(Type::Unit);
-				Print(Box::new(self.annotate(*expr)?))
-			}
-			Println(expr) => {
-				self.types[type_id] = Some(Type::Unit);
-				Println(Box::new(self.annotate(*expr)?))
-			}
-			Definition(name, typename, expr) => {
-				let id = self.types.new_type();
-				if !typename.is_empty() {
-					let typ = self.typechecker.parse_type(typename).unwrap();
-					self.types[id] = Some(typ);
-				}
-				self.scope.insert(name.into(), self.locals.len());
-				self.locals.push((name.into(), id));
-				self.types[type_id] = Some(Type::Unit);
-				let expr = self.annotate(*expr)?;
-				if let Err((t1, t2)) = self.types.merge(id, expr.type_id) {
-					return Err(TypeError {
-						location: expr.source,
-						message: Box::leak(format!("Expected {:?}, found {:?}", t1, t2).into()),
-					});
-				}
-				Definition(name, typename, Box::new(expr))
-			}
-			Assignment(name, expr) => {
-				let id = self.locals[self.scope[name]].1;
-				let expr = self.annotate(*expr)?;
-				if let Err((t1, t2)) = self.types.merge(id, expr.type_id) {
-					return Err(TypeError {
-						location: expr.source,
-						message: Box::leak(format!("Expected {:?}, found {:?}", t1, t2).into()),
-					});
-				}
-				self.types[type_id] = Some(Type::Unit);
-				Assignment(name, Box::new(expr))
-			}
-			If(expr, block, block1) => todo!(),
-			While(expr, block) => todo!(),
-			Return(expr) => todo!(),
-			Function(_, vec, block) => todo!(),
-			Class(_, vec) => todo!(),
-			Import(_) => todo!(),
-			Integer(literal) => {
-				self.types[type_id] = Some(Type::Str);
-				Integer(literal)
-			},
-			Float(_) => todo!(),
-			String(literal) => {
-				self.types[type_id] = Some(Type::Str);
-				String(literal)
-			}
-			Variable(_) => todo!(),
-			Grouping(expr) => todo!(),
-			Unary(unary_op, expr) => todo!(),
-			Binary(expr, bin_op, expr1) => todo!(),
-			FunctionCall(expr, vec) => todo!(),
-		};
-		Ok(Expr::typed(expr.source, kind, type_id))
+		let expr = expr
+			.add_annotations(|| self.types.new_type())
+			.try_foreach(&mut |t, kind| {
+				Ok(match kind {
+					ExprKind::Print(expr) => self.types[t] = Some(Type::Unit),
+					ExprKind::Println(expr) => self.types[t] = Some(Type::Unit),
+					ExprKind::Definition(name, typename, expr) => {
+						self.types[t] = Some(Type::Unit);
+						let name = *name;
+						let type_id = self.types.new_type();
+						if !typename.is_empty() {
+							let typ = self.typechecker.parse_type(typename).unwrap();
+							self.types[type_id] = Some(typ);
+						}
+						self.scope.insert(name.into(), self.locals.len());
+						self.locals.push((name.into(), type_id));
+						if let Err((t1, t2)) = self.types.merge(type_id, expr.annotations) {
+							return Err(TypeError {
+								location: expr.source,
+								message: Box::leak(format!("Expected {:?}, found {:?}", t1, t2).into()),
+							});
+						}
+					}
+					ExprKind::Assignment(name, expr) => {
+						self.types[t] = Some(Type::Unit);
+						let type_id = self.locals[self.scope[*name]].1;
+						if let Err((t1, t2)) = self.types.merge(type_id, expr.annotations) {
+							return Err(TypeError {
+								location: expr.source,
+								message: Box::leak(format!("Expected {:?}, found {:?}", t1, t2).into()),
+							});
+						}
+					}
+					ExprKind::If(expr, block, block1) => todo!(),
+					ExprKind::While(expr, block) => todo!(),
+					ExprKind::Return(expr) => todo!(),
+					ExprKind::Integer(_) => self.types[t] = Some(Type::I64),
+					ExprKind::Float(_) => self.types[t] = Some(Type::F64),
+					ExprKind::String(_) => self.types[t] = Some(Type::Str),
+					ExprKind::Variable(name) => {
+						self.types.merge(t, self.locals[self.scope[&name[..]]].1).unwrap()
+					}
+					ExprKind::Grouping(expr) => todo!(),
+					ExprKind::Unary(unary_op, expr) => todo!(),
+					ExprKind::Binary(lhs, op, rhs) => {
+						let lhs_type = lhs.annotations;
+						let rhs_type = rhs.annotations;
+						self.types.merge(lhs_type, rhs_type).map_err(|(t1, t2)| TypeError {
+							location: op.source,
+							message: "Operands have incompatible types",
+						})?;
+						self.types.merge(t, lhs_type).unwrap();
+					}
+					ExprKind::FunctionCall(expr, vec) => todo!(),
+					_ => unreachable!(),
+				})
+			})?
+			.map_annotations(&mut |t, _| ExprDataWithTypeId { type_id: t });
+		Ok(expr)
 	}
 }
 
@@ -357,7 +368,7 @@ impl TypesDsu {
 		let u = self.resolve_leader(u);
 		let v = self.resolve_leader(v);
 		if u == v {
-			return Ok(())
+			return Ok(());
 		}
 		let t1 = self.types.remove(&(u as u32)).unwrap();
 		let t2 = self.types.remove(&(v as u32)).unwrap();
