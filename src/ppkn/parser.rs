@@ -117,19 +117,18 @@ impl<'a> Parser<'a> {
 			self.position = start_position;
 			err
 		})?;
-		let typename = self.expect_identifier().map_err(|err| {
+		let typename = self.expect_identifier().map(|token| &token.source[..0]);
+		// println!("{:?}", &self.tokens[self.position - 1..self.position + 2]);
+		let equal_sign = self.expect(TokenKind::Equal).map_err(|err| {
 			self.position = start_position;
 			err
 		})?;
-		self.expect(TokenKind::Equal).map_err(|err| {
-			self.position = start_position;
-			err
-		})?;
+		let typename = typename.unwrap_or(&equal_sign.source[..0]);
 		let value = self.expression().map_err(|err| {
 			self.position = start_position;
 			err
 		})?;
-		Ok((variable.source, typename.source, Box::new(value)))
+		Ok((variable.source, typename, Box::new(value)))
 	}
 
 	fn assignment(&mut self) -> Result<(Identifier<'a>, Box<Expr<'a>>), SyntaxError<'a>> {
