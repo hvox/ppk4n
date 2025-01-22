@@ -31,12 +31,13 @@ pub enum ExprKind<'a, T> {
 	Integer(u64),
 	Float(f64),
 	String(Box<str>),
-	Variable(Box<str>),
+	Variable(Box<str>), // TODO why do I need Box<str>?
 
 	Grouping(Box<Expr<'a, T>>),
 	Unary(UnaryOp<'a>, Box<Expr<'a, T>>),
 	Binary(Box<Expr<'a, T>>, BinOp<'a>, Box<Expr<'a, T>>),
 	FunctionCall(Identifier<'a>, Vec<Expr<'a, T>>),
+	MethodCall(Identifier<'a>, Identifier<'a>, Vec<Expr<'a, T>>),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -103,20 +104,20 @@ impl<'a, T> Expr<'a, T> {
 
 	pub fn try_map_annotations<F, R, E>(self, f: &mut F) -> Result<Expr<'a, R>, E>
 	where
-		F: FnMut(T, &ExprKind<'a, R>) -> Result<R, E>,
+		F: FnMut(T, &'a str, &ExprKind<'a, R>) -> Result<R, E>,
 	{
 		let kind = self.kind.try_map_annotations(f)?;
-		let annotations = f(self.annotations, &kind)?;
+		let annotations = f(self.annotations, self.source, &kind)?;
 		Ok(Expr { source: self.source, kind, annotations })
 	}
 
 	pub fn try_foreach<F, E>(self, f: &mut F) -> Result<Self, E>
 	where
-		F: FnMut(T, &ExprKind<'a, T>) -> Result<(), E>,
+		F: FnMut(T, &'a str, &ExprKind<'a, T>) -> Result<(), E>,
 		T: Clone,
 	{
-		self.try_map_annotations(&mut |x, kind| {
-			f(x.clone(), kind)?;
+		self.try_map_annotations(&mut |x, source, kind| {
+			f(x.clone(), source, kind)?;
 			Ok(x)
 		})
 	}
@@ -160,6 +161,9 @@ impl<'a, T> ExprKind<'a, T> {
 			FunctionCall(name, args) => {
 				FunctionCall(name, args.into_iter().map(|stmt| stmt.map_annotations(f)).collect())
 			}
+			MethodCall(obj, func, args) => {
+				MethodCall(obj, func, args.into_iter().map(|stmt| stmt.map_annotations(f)).collect())
+			}
 			Variable(x) => Variable(x),
 			Integer(x) => Integer(x),
 			String(x) => String(x),
@@ -170,7 +174,7 @@ impl<'a, T> ExprKind<'a, T> {
 
 	pub fn try_map_annotations<F, R, E>(self, f: &mut F) -> Result<ExprKind<'a, R>, E>
 	where
-		F: FnMut(T, &ExprKind<'a, R>) -> Result<R, E>,
+		F: FnMut(T, &'a str, &ExprKind<'a, R>) -> Result<R, E>,
 	{
 		use ExprKind::*;
 		Ok(match self {
@@ -207,6 +211,9 @@ impl<'a, T> ExprKind<'a, T> {
 			}
 			FunctionCall(name, args) => {
 				FunctionCall(name, try_map(args, |arg| Ok(arg.try_map_annotations(f)?))?)
+			}
+			MethodCall(obj, func, args) => {
+				MethodCall(obj, func, try_map(args, |arg| Ok(arg.try_map_annotations(f)?))?)
 			}
 			Variable(x) => Variable(x),
 			Integer(x) => Integer(x),

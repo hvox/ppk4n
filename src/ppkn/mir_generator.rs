@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::marker::PhantomData;
 use std::ops::Index;
 use std::ops::IndexMut;
+use std::rc::Rc;
 
 use indexmap::IndexMap;
 
@@ -20,7 +21,14 @@ pub fn typecheck(program: Block<()>) -> Result<Program, TypeError> {
 struct Typechecker<'a> {
 	// ast: Block<'a, ()>,
 	signatures: IndexMap<Str, FnSign>,
+	structs: IndexMap<Str, StructSign>,
 	_dummy: PhantomData<&'a ()>,
+}
+
+struct StructSign {
+	name: Str,
+	params: Vec<Str>,
+	methods: IndexMap<Str, FnSign>,
 }
 
 struct FnSign {
@@ -35,9 +43,32 @@ pub struct TypeError<'a> {
 	pub message: &'static str,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum UnresolvedType {
+	Unknown,
+	Unit,
+	Bool,
+	I64,
+	U64,
+	F64,
+	Str,
+	Vec(TypeId),
+}
+
 impl<'a> Typechecker<'a> {
 	fn new() -> Self {
-		Self { signatures: IndexMap::new(), _dummy: PhantomData }
+		let stdlib_structs = IndexMap::from([(
+			"Array".into(),
+			StructSign {
+				name: "Array".into(),
+				params: vec!["T".into()],
+				methods: IndexMap::from([(
+					Str::from("push"),
+					FnSign { name: "push".into(), params: vec![], result: Type::Unit },
+				)]),
+			},
+		)]);
+		Self { signatures: IndexMap::new(), structs: stdlib_structs, _dummy: PhantomData }
 	}
 
 	fn test_mut(&mut self) {}
@@ -61,7 +92,7 @@ impl<'a> Typechecker<'a> {
 			let fn_typechecker = FunctionTypechecker::new(&self, signature);
 			functions.push(fn_typechecker.typecheck(source)?);
 		}
-		Ok(Program { functions })
+		Ok(Program { structs: vec![], functions })
 	}
 
 	fn parse_type(&self, typename: &'a str) -> Result<Type, TypeError<'a>> {
@@ -91,7 +122,7 @@ impl<'a, 'b> FunctionTypechecker<'a, 'b> {
 		let mut scope = HashMap::new();
 		let mut types = TypesDsu::new();
 		for (i, (name, real_type)) in signature.params.iter().enumerate() {
-			let type_id = types.add_type(*real_type);
+			let type_id = types.add_type(real_type.clone());
 			locals.push((name.clone(), type_id));
 			scope.insert(name.clone(), i);
 		}
@@ -104,8 +135,8 @@ impl<'a, 'b> FunctionTypechecker<'a, 'b> {
 			stmts.push(self.annotate(stmt)?);
 		}
 		for typ in self.types.types.values_mut() {
-			if typ.is_none() {
-				*typ = Some(Type::Unit);
+			if typ == &UnresolvedType::Unknown {
+				*typ = UnresolvedType::Unit;
 			}
 		}
 		let mut typechecked_body = vec![];
@@ -115,8 +146,12 @@ impl<'a, 'b> FunctionTypechecker<'a, 'b> {
 		Ok(Function {
 			name: self.signature.name.clone(),
 			params: self.signature.params.clone(),
-			result: self.signature.result,
-			locals: self.locals.into_iter().map(|(name, typ)| (name, self.types[typ].unwrap())).collect(),
+			result: self.signature.result.clone(),
+			locals: self
+				.locals
+				.into_iter()
+				.map(|(name, typ)| (name, self.types.actualize_type(typ)))
+				.collect(),
 			body: typechecked_body,
 			extra: (),
 		})
@@ -132,13 +167,14 @@ impl<'a, 'b> FunctionTypechecker<'a, 'b> {
 			ExprKind::Print(expr) => PrintStr(converted_to_str(self.typecheck_expr(*expr)?)),
 			ExprKind::Println(expr) => PrintlnStr(converted_to_str(self.typecheck_expr(*expr)?)),
 			ExprKind::Assignment(name, expr) | ExprKind::Definition(name, _, expr) => {
-				match self.types[expr.type_id].unwrap() {
+				match Type::from(&self.types[expr.type_id]) {
 					Type::Unit => Drop(self.typecheck_expr(*expr)?),
 					Type::Bool => SetBool(self.scope[name], self.typecheck_bool(*expr)?),
 					Type::I64 => SetI64(self.scope[name], self.typecheck_i64(*expr)?),
 					Type::U64 => SetU64(self.scope[name], self.typecheck_u64(*expr)?),
 					Type::F64 => SetF64(self.scope[name], self.typecheck_f64(*expr)?),
 					Type::Str => SetStr(self.scope[name], self.typecheck_str(*expr)?),
+					Type::Vec(_) => SetVec(self.scope[name]),
 				}
 			}
 			ExprKind::If(expr, block, block1) => todo!(),
@@ -154,6 +190,10 @@ impl<'a, 'b> FunctionTypechecker<'a, 'b> {
 					}
 					typed_params
 				})
+			}
+			ExprKind::MethodCall(obj, method, vec) => {
+				assert!(method == "push");
+				Push(self.scope[obj], self.typecheck_expr(vec[0].clone())?)
 			}
 			_ => unreachable!(),
 		};
@@ -238,16 +278,29 @@ impl<'a, 'b> FunctionTypechecker<'a, 'b> {
 		};
 		Ok(InstrStr { source, kind: Box::new(kind) })
 	}
+	fn typecheck_vec(&mut self, expr: Expr<'a, ExprDataWithTypeId>) -> Result<InstrVec<'a>, TypeError<'a>> {
+		use InstrKindVec::*;
+		let source = expr.source;
+		let kind = match expr.kind {
+			ExprKind::Variable(name) => Variable(self.scope[&name[..]]),
+			_ => unreachable!(),
+		};
+		Ok(InstrVec { source, kind: Box::new(kind) })
+	}
 
 	fn typecheck_expr(&mut self, expr: Expr<'a, ExprDataWithTypeId>) -> Result<Instr<'a>, TypeError<'a>> {
 		let source = expr.source;
-		let kind = match self.types[expr.type_id].unwrap() {
+		let kind = match Type::from(&self.types[expr.type_id]) {
 			Type::Unit => InstrKind::Cntrl(self.typecheck_stmt(expr)?),
 			Type::Bool => todo!(),
 			Type::I64 => InstrKind::I64(self.typecheck_i64(expr)?),
 			Type::U64 => todo!(),
 			Type::F64 => InstrKind::F64(self.typecheck_f64(expr)?),
 			Type::Str => InstrKind::Str(self.typecheck_str(expr)?),
+			Type::Vec(_) => {
+				let Type::Vec(typ) = self.types.actualize_type(expr.type_id.clone()) else { unreachable!() };
+				InstrKind::Vec(self.typecheck_vec(expr)?, (*typ).clone())
+			}
 		};
 		Ok(Instr { source, kind })
 	}
@@ -255,17 +308,17 @@ impl<'a, 'b> FunctionTypechecker<'a, 'b> {
 	fn annotate(&mut self, expr: Expr<'a, ()>) -> Result<Expr<'a, ExprDataWithTypeId>, TypeError<'a>> {
 		let expr = expr
 			.add_annotations(|| self.types.new_type())
-			.try_foreach(&mut |t, kind| {
-				Ok(match kind {
-					ExprKind::Print(expr) => self.types[t] = Some(Type::Unit),
-					ExprKind::Println(expr) => self.types[t] = Some(Type::Unit),
+			.try_foreach(&mut |t, source, kind| {
+				Ok(match &kind {
+					ExprKind::Print(expr) => self.types[t] = UnresolvedType::Unit,
+					ExprKind::Println(expr) => self.types[t] = UnresolvedType::Unit,
 					ExprKind::Definition(name, typename, expr) => {
-						self.types[t] = Some(Type::Unit);
+						self.types[t] = UnresolvedType::Unit;
 						let name = *name;
 						let type_id = self.types.new_type();
 						if !typename.is_empty() {
 							let typ = self.typechecker.parse_type(typename).unwrap();
-							self.types[type_id] = Some(typ);
+							self.types[t] = UnresolvedType::from(&typ);
 						}
 						self.scope.insert(name.into(), self.locals.len());
 						self.locals.push((name.into(), type_id));
@@ -277,7 +330,7 @@ impl<'a, 'b> FunctionTypechecker<'a, 'b> {
 						}
 					}
 					ExprKind::Assignment(name, expr) => {
-						self.types[t] = Some(Type::Unit);
+						self.types[t] = UnresolvedType::Unit;
 						let type_id = self.locals[self.scope[*name]].1;
 						if let Err((t1, t2)) = self.types.merge(type_id, expr.annotations) {
 							return Err(TypeError {
@@ -289,12 +342,28 @@ impl<'a, 'b> FunctionTypechecker<'a, 'b> {
 					ExprKind::If(expr, block, block1) => todo!(),
 					ExprKind::While(expr, block) => todo!(),
 					ExprKind::Return(expr) => todo!(),
-					ExprKind::Integer(_) => self.types[t] = Some(Type::I64),
-					ExprKind::Float(_) => self.types[t] = Some(Type::F64),
-					ExprKind::String(_) => self.types[t] = Some(Type::Str),
-					ExprKind::Variable(name) => {
-						self.types.merge(t, self.locals[self.scope[&name[..]]].1).unwrap()
-					}
+					ExprKind::Integer(_) => self.types[t] = UnresolvedType::I64,
+					ExprKind::Float(_) => self.types[t] = UnresolvedType::F64,
+					ExprKind::String(_) => self.types[t] = UnresolvedType::Str,
+					ExprKind::Variable(name) => match self.scope.get(&name[..]) {
+						Some(variable_idx) => {
+							self.types.merge(t, self.locals[*variable_idx].1).unwrap();
+						}
+						None if &name[..] == "[]" => {
+							let array = self.types.new_type();
+							self.types[array] = UnresolvedType::Vec(self.types.new_type());
+							self.types.merge(t, array).unwrap();
+						}
+						None => {
+							return Err(TypeError {
+								location: source,
+								message: Box::leak(Box::from(format!(
+									"Variable {} is not found in current scope",
+									name
+								))),
+							});
+						}
+					},
 					ExprKind::Grouping(expr) => todo!(),
 					ExprKind::Unary(unary_op, expr) => todo!(),
 					ExprKind::Binary(lhs, op, rhs) => {
@@ -307,9 +376,30 @@ impl<'a, 'b> FunctionTypechecker<'a, 'b> {
 						self.types.merge(t, lhs_type).unwrap();
 					}
 					ExprKind::FunctionCall(name, args) => {
-						let typ = self.typechecker.signatures[*name].result;
+						let typ = self.typechecker.signatures[*name].result.clone();
 						let expected_typ = self.types.add_type(typ);
 						self.types.merge(t, expected_typ).unwrap()
+					}
+					ExprKind::MethodCall(obj, method, args) => {
+						let Some(variable_idx) = self.scope.get(&obj[..]) else {
+							return Err(TypeError {
+								location: source,
+								message: Box::leak(Box::from(format!(
+									"Variable {} is not found in current scope",
+									obj
+								))),
+							});
+						};
+						let cls = self.types[self.locals[*variable_idx].1].clone();
+						let UnresolvedType::Vec(inner_type) = cls else {
+							unreachable!();
+						};
+						let typ = &self.typechecker.structs[0].methods[*method].result;
+						let expected_typ = self.types.add_type(typ.clone());
+						self.types.merge(t, expected_typ).unwrap();
+						for arg in args {
+							self.types.merge(inner_type, arg.annotations).unwrap();
+						}
 					}
 					_ => unreachable!(),
 				})
@@ -337,16 +427,17 @@ impl<'a> Expr<'a, ExprDataWithTypeId> {
 // 	Expr::from(source, kind, TypeId { type_id })
 // }
 
+#[derive(Clone, Debug)]
 struct ExprDataWithTypeId {
 	pub type_id: TypeId,
 }
 
 struct TypesDsu {
 	leaders: Vec<Cell<u32>>,
-	types: HashMap<u32, Option<Type>>,
+	types: HashMap<u32, UnresolvedType>,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct TypeId(u32);
 
 impl TypesDsu {
@@ -357,18 +448,18 @@ impl TypesDsu {
 	fn new_type(&mut self) -> TypeId {
 		let id = self.leaders.len() as u32;
 		self.leaders.push(Cell::new(id));
-		self.types.insert(id, None);
+		self.types.insert(id, UnresolvedType::Unknown);
 		TypeId(id)
 	}
 
 	fn add_type(&mut self, typ: Type) -> TypeId {
 		let id = self.leaders.len() as u32;
 		self.leaders.push(Cell::new(id));
-		self.types.insert(id, Some(typ));
+		self.types.insert(id, UnresolvedType::from(&typ));
 		TypeId(id)
 	}
 
-	fn merge(&mut self, u: TypeId, v: TypeId) -> Result<(), (Type, Type)> {
+	fn merge(&mut self, u: TypeId, v: TypeId) -> Result<(), (UnresolvedType, UnresolvedType)> {
 		let u = self.resolve_leader(u);
 		let v = self.resolve_leader(v);
 		if u == v {
@@ -376,13 +467,13 @@ impl TypesDsu {
 		}
 		let t1 = self.types.remove(&(u as u32)).unwrap();
 		let t2 = self.types.remove(&(v as u32)).unwrap();
+		use UnresolvedType::*;
 		let union_type = match (t1, t2) {
-			(None, None) => None,
-			(None, Some(t)) => Some(t),
-			(Some(t), None) => Some(t),
-			(Some(t1), Some(t2)) => {
+			(Unknown, Unknown) => Unknown,
+			(Unknown, t) | (t, Unknown) => t,
+			(t1, t2) => {
 				if (t1 == t2) {
-					Some(t1)
+					t1
 				} else {
 					return Err((t1, t2));
 				}
@@ -411,10 +502,23 @@ impl TypesDsu {
 		self.leaders[v] = Cell::new(u as u32);
 		u
 	}
+
+	fn actualize_type(&self, id: TypeId) -> Type {
+		use UnresolvedType::*;
+		match self[id] {
+			Unknown | Unit => Type::Unit,
+			Bool => Type::Bool,
+			I64 => Type::I64,
+			U64 => Type::U64,
+			F64 => Type::F64,
+			Str => Type::Str,
+			Vec(t) => Type::Vec(Rc::new(self.actualize_type(t))),
+		}
+	}
 }
 
 impl Index<TypeId> for TypesDsu {
-	type Output = Option<Type>;
+	type Output = UnresolvedType;
 
 	fn index(&self, index: TypeId) -> &Self::Output {
 		&self.types[&(self.resolve_leader(index) as u32)]
@@ -427,6 +531,36 @@ impl IndexMut<TypeId> for TypesDsu {
 	}
 }
 
+impl From<&Type> for UnresolvedType {
+	fn from(value: &Type) -> Self {
+		use UnresolvedType::*;
+		match value {
+			Type::Unit => Unit,
+			Type::Bool => Bool,
+			Type::I64 => I64,
+			Type::U64 => U64,
+			Type::F64 => F64,
+			Type::Str => Str,
+			Type::Vec(_) => unreachable!(),
+		}
+	}
+}
+
+impl From<&UnresolvedType> for Type {
+	fn from(value: &UnresolvedType) -> Self {
+		use UnresolvedType::*;
+		match value {
+			Unknown | Unit => Type::Unit,
+			Bool => Type::Bool,
+			I64 => Type::I64,
+			U64 => Type::U64,
+			F64 => Type::F64,
+			Str => Type::Str,
+			Vec(_) => Type::Vec(Rc::new(Type::U64)),
+		}
+	}
+}
+
 fn converted_to_str(anything: Instr) -> InstrStr {
 	use InstrKind::*;
 	let kind = match anything.kind {
@@ -436,6 +570,7 @@ fn converted_to_str(anything: Instr) -> InstrStr {
 		U64(instr_u64) => todo!(),
 		F64(instr_f64) => InstrKindStr::CastF64(instr_f64),
 		Str(instr_str) => *instr_str.kind,
+		Vec(instr_vec, typ) => InstrKindStr::CastVec(instr_vec, typ),
 	};
 	InstrStr { source: anything.source, kind: Box::new(kind) }
 }

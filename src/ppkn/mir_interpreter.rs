@@ -1,5 +1,5 @@
 #![allow(unused)]
-use std::mem::transmute;
+use std::{any::Any, mem::transmute, rc::Rc};
 
 use super::mir::*;
 
@@ -51,6 +51,10 @@ impl<'a> Program<'a> {
 			InstrKindCntrl::DefF64(id, value) | InstrKindCntrl::SetF64(id, value) => {
 				locals[*id] = unsafe { transmute(self.eval_f64(locals, value)?) }
 			}
+			InstrKindCntrl::SetVec(id) => {
+				let vec = Rc::new(Vec::<u64>::new());
+				locals[*id] = Rc::into_raw(vec) as u64;
+			}
 			InstrKindCntrl::DefU64(_, instr_u64) => todo!(),
 			InstrKindCntrl::DefStr(_, instr_str) => todo!(),
 			InstrKindCntrl::DefBool(_, instr_bool) => todo!(),
@@ -67,6 +71,11 @@ impl<'a> Program<'a> {
 			}
 			InstrKindCntrl::Return(instr) => todo!(),
 			InstrKindCntrl::Drop(instr) => todo!(),
+			InstrKindCntrl::Push(id, instr) => {
+				let mut vec = unsafe { Rc::from_raw(locals[*id] as *mut Vec<u64>) };
+				Rc::make_mut(&mut vec).push(self.eval_instr(locals, instr)?);
+				Rc::into_raw(vec);
+			}
 		})
 	}
 
@@ -112,6 +121,31 @@ impl<'a> Program<'a> {
 			Call(_) => todo!(),
 			CastI64(instr) => self.eval_i64(locals, instr)?.to_string().into(),
 			CastF64(instr) => self.eval_f64(locals, instr)?.to_string().into(),
+			CastVec(instr_vec, typ) => match typ {
+				Type::Unit => unreachable!(),
+				Type::Bool => todo!(),
+				Type::I64 => {
+					let vec =
+						unsafe { Rc::from_raw(self.eval_vec(locals, instr_vec, typ)? as *const Vec<u64>) };
+					let s = format!("{:?}", vec);
+					Rc::into_raw(vec);
+					s.into()
+				}
+				Type::U64 => todo!(),
+				Type::F64 => todo!(),
+				Type::Str => todo!(),
+				Type::Vec(_) => unreachable!(),
+			},
+		})
+	}
+
+	fn eval_vec(&self, locals: &mut Vec<u64>, instr: &InstrVec, typ: &Type) -> Result<u64, Interruption<'a>> {
+		use InstrKindVec::*;
+		Ok(match &*instr.kind {
+			Return(instr) => todo!(),
+			Variable(idx) => unsafe { transmute(locals[*idx]) },
+			Value(_) => todo!(),
+			Call(_) => todo!(),
 		})
 	}
 
@@ -127,6 +161,7 @@ impl<'a> Program<'a> {
 			InstrKind::U64(instr_u64) => todo!(),
 			InstrKind::F64(instr_f64) => todo!(),
 			InstrKind::Str(instr) => self.eval_str(locals, instr)?.as_ptr() as u64,
+			InstrKind::Vec(instr_vec, typ) => self.eval_vec(locals, instr_vec, typ)?,
 		})
 	}
 }

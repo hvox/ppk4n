@@ -107,9 +107,7 @@ impl<'a> Parser<'a> {
 		}
 	}
 
-	fn definition(
-		&mut self,
-	) -> Result<(Identifier<'a>, Typename<'a>, Box<Expr<'a>>), SyntaxError<'a>> {
+	fn definition(&mut self) -> Result<(Identifier<'a>, Typename<'a>, Box<Expr<'a>>), SyntaxError<'a>> {
 		// println!("{:?}", &self.tokens[self.position..]);
 		let start_position = self.position;
 		let variable = self.expect_identifier()?;
@@ -165,10 +163,7 @@ impl<'a> Parser<'a> {
 			self.position = start_position;
 			err
 		})?;
-		Ok(Expr::new(
-			span(start.source, end.source),
-			ExprKind::If(Box::new(condition), block, None),
-		))
+		Ok(Expr::new(span(start.source, end.source), ExprKind::If(Box::new(condition), block, None)))
 	}
 
 	fn while_loop(&mut self) -> Result<Expr<'a>, SyntaxError<'a>> {
@@ -201,10 +196,7 @@ impl<'a> Parser<'a> {
 			self.position = start_position;
 			err
 		})?;
-		Ok(Expr::new(
-			span(start.source, return_value.source),
-			ExprKind::Return(Box::new(return_value)),
-		))
+		Ok(Expr::new(span(start.source, return_value.source), ExprKind::Return(Box::new(return_value))))
 	}
 
 	fn function(&mut self) -> Result<Expr<'a>, SyntaxError<'a>> {
@@ -244,9 +236,7 @@ impl<'a> Parser<'a> {
 		))
 	}
 
-	fn function_arguments(
-		&mut self,
-	) -> Result<Vec<(Identifier<'a>, Typename<'a>)>, SyntaxError<'a>> {
+	fn function_arguments(&mut self) -> Result<Vec<(Identifier<'a>, Typename<'a>)>, SyntaxError<'a>> {
 		let start_position = self.position;
 		let mut args = vec![];
 		loop {
@@ -345,6 +335,9 @@ impl<'a> Parser<'a> {
 		if let Ok(call) = self.function_call() {
 			return Ok(call);
 		}
+		if let Ok(call) = self.method_call() {
+			return Ok(call);
+		}
 		return self.unary();
 	}
 
@@ -372,6 +365,41 @@ impl<'a> Parser<'a> {
 		return Ok(Expr::new(
 			span(self.tokens[start_position].source, end.source),
 			ExprKind::FunctionCall(function.source, args),
+		));
+	}
+
+	fn method_call(&mut self) -> Result<Expr<'a>, SyntaxError<'a>> {
+		let start_position = self.position;
+		let object = self.unary().map_err(|err| {
+			self.position = start_position;
+			err
+		})?;
+		self.expect(TokenKind::Dot).map_err(|err| {
+			self.position = start_position;
+			err
+		})?;
+		let method = self.expect_identifier().map_err(|err| {
+			self.position = start_position;
+			err
+		})?;
+		self.expect(TokenKind::LeftParen).map_err(|err| {
+			self.position = start_position;
+			err
+		})?;
+		let mut args = vec![];
+		while let Ok(arg) = self.expression() {
+			args.push(arg);
+			if self.expect(TokenKind::Comma).is_err() {
+				break;
+			}
+		}
+		let end = self.expect(TokenKind::RightParen).map_err(|err| {
+			self.position = start_position;
+			err
+		})?;
+		return Ok(Expr::new(
+			span(self.tokens[start_position].source, end.source),
+			ExprKind::MethodCall(object.source, method.source, args),
 		));
 	}
 

@@ -3,7 +3,15 @@ use std::{ops::Deref, rc::Rc};
 // TODO: rename to module
 #[derive(Clone, Debug)]
 pub struct Program<'a> {
+	pub structs: Vec<Struct<'a>>,
 	pub functions: Vec<Function<'a, ()>>,
+}
+
+#[derive(Clone, Debug)]
+pub struct Struct<'a> {
+	pub name: Str,
+	pub params: Vec<Str>,
+	pub methods: Vec<Function<'a, ()>>,
 }
 
 #[derive(Clone, Debug)]
@@ -24,7 +32,7 @@ impl<T> Deref for Function<'_, T> {
 	}
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Type {
 	Unit,
 	Bool,
@@ -32,6 +40,7 @@ pub enum Type {
 	U64,
 	F64,
 	Str,
+	Vec(Rc<Type>),
 }
 
 #[derive(Clone, Debug)]
@@ -48,6 +57,7 @@ pub enum InstrKind<'a> {
 	U64(InstrU64<'a>),
 	F64(InstrF64<'a>),
 	Str(InstrStr<'a>),
+	Vec(InstrVec<'a>, Type),
 }
 
 #[derive(Clone, Debug)]
@@ -145,6 +155,7 @@ pub enum InstrKindStr<'a> {
 	Call(usize),
 	CastI64(InstrI64<'a>),
 	CastF64(InstrF64<'a>),
+	CastVec(InstrVec<'a>, Type),
 }
 
 impl<'a> InstrStr<'a> {
@@ -177,6 +188,26 @@ impl<'a> InstrBool<'a> {
 }
 
 #[derive(Clone, Debug)]
+pub struct InstrVec<'a> {
+	pub source: &'a str,
+	pub kind: Box<InstrKindVec<'a>>,
+}
+
+#[derive(Clone, Debug)]
+pub enum InstrKindVec<'a> {
+	Return(Instr<'a>),
+	Variable(usize),
+	Value(Str),
+	Call(usize),
+}
+
+impl<'a> InstrVec<'a> {
+	fn new(source: &'a str, kind: InstrKindVec<'a>) -> Self {
+		Self { source, kind: Box::new(kind) }
+	}
+}
+
+#[derive(Clone, Debug)]
 pub struct InstrCntrl<'a> {
 	pub source: &'a str,
 	pub kind: Box<InstrKindCntrl<'a>>,
@@ -195,12 +226,14 @@ pub enum InstrKindCntrl<'a> {
 	SetF64(usize, InstrF64<'a>),
 	SetStr(usize, InstrStr<'a>),
 	SetBool(usize, InstrBool<'a>),
+	SetVec(usize),
 	PrintStr(InstrStr<'a>),
 	PrintlnStr(InstrStr<'a>),
 	While(InstrBool<'a>, Vec<InstrCntrl<'a>>),
 	Block(Vec<InstrCntrl<'a>>),
 	Return(Instr<'a>),
 	Drop(Instr<'a>),
+	Push(usize, Instr<'a>),
 }
 
 impl<'a> InstrCntrl<'a> {
