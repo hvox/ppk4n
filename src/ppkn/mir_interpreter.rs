@@ -48,12 +48,13 @@ impl<'a> Program<'a> {
 			InstrKindCntrl::DefI64(id, value) | InstrKindCntrl::SetI64(id, value) => {
 				locals[*id] = unsafe { transmute(self.eval_i64(locals, value)?) }
 			}
+			InstrKindCntrl::DefF64(id, value) | InstrKindCntrl::SetF64(id, value) => {
+				locals[*id] = unsafe { transmute(self.eval_f64(locals, value)?) }
+			}
 			InstrKindCntrl::DefU64(_, instr_u64) => todo!(),
-			InstrKindCntrl::DefF64(_, instr_f64) => todo!(),
 			InstrKindCntrl::DefStr(_, instr_str) => todo!(),
 			InstrKindCntrl::DefBool(_, instr_bool) => todo!(),
 			InstrKindCntrl::SetU64(_, instr_u64) => todo!(),
-			InstrKindCntrl::SetF64(_, instr_f64) => todo!(),
 			InstrKindCntrl::SetStr(_, instr_str) => todo!(),
 			InstrKindCntrl::SetBool(_, instr_bool) => todo!(),
 			InstrKindCntrl::PrintStr(value) => print!("{}", self.eval_str(locals, value)?),
@@ -80,6 +81,20 @@ impl<'a> Program<'a> {
 			And(lhs, rhs) => self.eval_i64(locals, lhs)? & self.eval_i64(locals, rhs)?,
 			Xor(lhs, rhs) => self.eval_i64(locals, lhs)? ^ self.eval_i64(locals, rhs)?,
 			Or(lhs, rhs) => self.eval_i64(locals, lhs)? | self.eval_i64(locals, rhs)?,
+			Return(instr) => todo!(),
+			Variable(idx) => unsafe { transmute(locals[*idx]) },
+			Call(_) => todo!(),
+			Value(val) => *val,
+		})
+	}
+
+	fn eval_f64(&self, locals: &mut Vec<u64>, instr: &InstrF64) -> Result<f64, Interruption<'a>> {
+		use InstrKindF64::*;
+		Ok(match &*instr.kind {
+			Add(lhs, rhs) => self.eval_f64(locals, lhs)? + self.eval_f64(locals, rhs)?,
+			Sub(lhs, rhs) => self.eval_f64(locals, lhs)? - self.eval_f64(locals, rhs)?,
+			Mult(lhs, rhs) => self.eval_f64(locals, lhs)? * self.eval_f64(locals, rhs)?,
+			Div(lhs, rhs) => self.eval_f64(locals, lhs)? / self.eval_f64(locals, rhs)?,
 			Return(instr) => todo!(),
 			Variable(idx) => unsafe { transmute(locals[*idx]) },
 			Call(_) => todo!(),

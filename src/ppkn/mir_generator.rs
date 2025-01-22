@@ -206,9 +206,22 @@ impl<'a, 'b> FunctionTypechecker<'a, 'b> {
 	}
 
 	fn typecheck_f64(&mut self, expr: Expr<'a, ExprDataWithTypeId>) -> Result<InstrF64<'a>, TypeError<'a>> {
+		use InstrKindF64::*;
 		let source = expr.source;
 		let kind = match expr.kind {
-			_ => todo!(),
+			ExprKind::Float(value) => Value(value),
+			ExprKind::Variable(name) => Variable(self.scope[&name[..]]),
+			ExprKind::Grouping(expr) => *self.typecheck_f64(*expr)?.kind,
+			ExprKind::Unary(unary_op, expr) => todo!(),
+			ExprKind::Binary(lhs, op, rhs) => match op.kind {
+				BinOpKind::Minus => Sub(self.typecheck_f64(*lhs)?, self.typecheck_f64(*rhs)?),
+				BinOpKind::Plus => Add(self.typecheck_f64(*lhs)?, self.typecheck_f64(*rhs)?),
+				BinOpKind::Slash => Div(self.typecheck_f64(*lhs)?, self.typecheck_f64(*rhs)?),
+				BinOpKind::Star => Mult(self.typecheck_f64(*lhs)?, self.typecheck_f64(*rhs)?),
+				_ => unreachable!(),
+			},
+			ExprKind::FunctionCall(expr, vec) => todo!(),
+			_ => unreachable!(),
 		};
 		Ok(InstrF64 { source, kind: Box::new(kind) })
 	}
@@ -233,7 +246,7 @@ impl<'a, 'b> FunctionTypechecker<'a, 'b> {
 			Type::Bool => todo!(),
 			Type::I64 => InstrKind::I64(self.typecheck_i64(expr)?),
 			Type::U64 => todo!(),
-			Type::F64 => todo!(),
+			Type::F64 => InstrKind::F64(self.typecheck_f64(expr)?),
 			Type::Str => InstrKind::Str(self.typecheck_str(expr)?),
 		};
 		Ok(Instr { source, kind })
