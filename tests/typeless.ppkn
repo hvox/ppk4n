@@ -1,0 +1,11 @@
+fun main() {
+	x := 123
+	y := 321
+	z := x + y
+	println z # 444
+
+	x := 1.2
+	y := 3.4
+	z := x + y
+	println z # 4.6
+}
