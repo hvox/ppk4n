@@ -26,8 +26,17 @@ pub fn parse(source: &str) -> Result<Program, PpknError> {
 }
 
 pub fn run(source: &str) -> Result<(), PpknError> {
+	const DEBUG_PARSING: bool = false;
 	let program = parse(source)?;
-	// for f in &program.functions { println!("{:?}", f); }
+	#[cfg(debug_assertions)]
+	if DEBUG_PARSING {
+		for func in &program.functions {
+			println!("fun {} {:?} -> {:?}:", func.name, func.params, func.result);
+			for stmt in &func.body {
+				println!("  {:12} {:?}", stmt.source.replace("\n", "\\n"), stmt.kind);
+			}
+		}
+	}
 	program.run()?;
 	Ok(())
 }
