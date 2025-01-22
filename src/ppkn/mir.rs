@@ -144,6 +144,7 @@ pub enum InstrKindStr<'a> {
 	Value(Str),
 	Call(usize),
 	CastI64(InstrI64<'a>),
+	CastF64(InstrF64<'a>),
 }
 
 impl<'a> InstrStr<'a> {

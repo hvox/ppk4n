@@ -111,6 +111,7 @@ impl<'a> Program<'a> {
 			Value(value) => value.clone(),
 			Call(_) => todo!(),
 			CastI64(instr) => self.eval_i64(locals, instr)?.to_string().into(),
+			CastF64(instr) => self.eval_f64(locals, instr)?.to_string().into(),
 		})
 	}
 

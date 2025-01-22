@@ -434,7 +434,7 @@ fn converted_to_str(anything: Instr) -> InstrStr {
 		Bool(instr_bool) => todo!(),
 		I64(instr_i64) => InstrKindStr::CastI64(instr_i64),
 		U64(instr_u64) => todo!(),
-		F64(instr_f64) => todo!(),
+		F64(instr_f64) => InstrKindStr::CastF64(instr_f64),
 		Str(instr_str) => *instr_str.kind,
 	};
 	InstrStr { source: anything.source, kind: Box::new(kind) }
