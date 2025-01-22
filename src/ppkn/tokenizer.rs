@@ -30,9 +30,7 @@ impl<'a> Tokenizer<'a> {
 	}
 
 	fn next_token(&mut self) -> Option<TokenKind> {
-		let Some(ch) = self.next_char() else {
-			return None;
-		};
+		let ch = self.next_char()?;
 		use TokenKind::*;
 		match ch {
 			'(' => Some(LeftParen),
@@ -94,7 +92,7 @@ impl<'a> Tokenizer<'a> {
 				break;
 			}
 		}
-		return TokenKind::Float(number);
+		TokenKind::Float(number)
 	}
 
 	fn string(&mut self) -> Box<str> {

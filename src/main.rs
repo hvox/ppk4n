@@ -12,7 +12,7 @@ fn main() {
 	match run(&source) {
 		Ok(program) => program,
 		Err(error) => {
-			let (row, column, line) = find_line_with(&source, &error.location);
+			let (row, column, line) = find_line_with(&source, error.location);
 			println!("{:3}: {}", row, line.replace("\t", " "));
 			println!("    {}{}", " ".repeat(column), "^".repeat(error.location.len()));
 			println!("{}: {}", error.typ, error.message);

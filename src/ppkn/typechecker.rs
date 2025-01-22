@@ -85,7 +85,7 @@ impl<'a> Typechecker<'a> {
 			ExprKind::Definition(name, typ, expr) => {
 				let var_id = scope.len();
 				scope.insert(name.to_string(), self.get_type_from_name(typ)?);
-				let op = self.typecheck_expr(&scope, expr)?;
+				let op = self.typecheck_expr(scope, expr)?;
 				instrs.push(Instr {
 					source: stmt.source,
 					kind: InstrKind::Definition(var_id, Box::new(op)),
@@ -113,11 +113,11 @@ impl<'a> Typechecker<'a> {
 			ExprKind::Assignment(name, expr) => {
 				let Some(var_id) = scope.get_index_of(*name) else {
 					return Err(TypeError {
-						location: *name,
+						location: name,
 						message: "Variable is not defined in this scope",
 					});
 				};
-				let op = self.typecheck_expr(&scope, expr)?;
+				let op = self.typecheck_expr(scope, expr)?;
 				instrs.push(Instr {
 					source: stmt.source,
 					kind: InstrKind::Assignment(var_id, Box::new(op)),
@@ -132,20 +132,20 @@ impl<'a> Typechecker<'a> {
 				instrs.push(Instr {
 					source: stmt.source,
 					kind: InstrKind::While(
-						Box::new(self.typecheck_expr(&scope, expr)?),
+						Box::new(self.typecheck_expr(scope, expr)?),
 						block_instrs,
 					),
 				})
 			}
 			ExprKind::Return(expr) => instrs.push(Instr {
 				source: stmt.source,
-				kind: InstrKind::Return(Box::new(self.typecheck_expr(&scope, expr)?)),
+				kind: InstrKind::Return(Box::new(self.typecheck_expr(scope, expr)?)),
 			}),
 			ExprKind::Function(_, vec, block) => todo!(),
 			ExprKind::Class(_, vec) => todo!(),
 			ExprKind::Import(_) => todo!(),
 			_ => {
-				instrs.push(self.typecheck_expr(&scope, stmt)?);
+				instrs.push(self.typecheck_expr(scope, stmt)?);
 			}
 		}
 		Ok(instrs)

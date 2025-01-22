@@ -83,7 +83,7 @@ pub enum InstrKindI64<'a> {
 }
 
 impl<'a> InstrI64<'a> {
-	fn new(source: &'a str, kind: InstrKindI64<'a>) -> Self {
+	pub fn new(source: &'a str, kind: InstrKindI64<'a>) -> Self {
 		Self { source, kind: Box::new(kind) }
 	}
 }
@@ -111,7 +111,7 @@ pub enum InstrKindU64<'a> {
 }
 
 impl<'a> InstrU64<'a> {
-	fn new(source: &'a str, kind: InstrKindU64<'a>) -> Self {
+	pub fn new(source: &'a str, kind: InstrKindU64<'a>) -> Self {
 		Self { source, kind: Box::new(kind) }
 	}
 }
@@ -135,7 +135,7 @@ pub enum InstrKindF64<'a> {
 }
 
 impl<'a> InstrF64<'a> {
-	fn new(source: &'a str, kind: InstrKindF64<'a>) -> Self {
+	pub fn new(source: &'a str, kind: InstrKindF64<'a>) -> Self {
 		Self { source, kind: Box::new(kind) }
 	}
 }
@@ -159,7 +159,7 @@ pub enum InstrKindStr<'a> {
 }
 
 impl<'a> InstrStr<'a> {
-	fn new(source: &'a str, kind: InstrKindStr<'a>) -> Self {
+	pub fn new(source: &'a str, kind: InstrKindStr<'a>) -> Self {
 		Self { source, kind: Box::new(kind) }
 	}
 }
@@ -182,7 +182,7 @@ pub enum InstrKindBool<'a> {
 }
 
 impl<'a> InstrBool<'a> {
-	fn new(source: &'a str, kind: InstrKindBool<'a>) -> Self {
+	pub fn new(source: &'a str, kind: InstrKindBool<'a>) -> Self {
 		Self { source, kind: Box::new(kind) }
 	}
 }
@@ -202,7 +202,7 @@ pub enum InstrKindVec<'a> {
 }
 
 impl<'a> InstrVec<'a> {
-	fn new(source: &'a str, kind: InstrKindVec<'a>) -> Self {
+	pub fn new(source: &'a str, kind: InstrKindVec<'a>) -> Self {
 		Self { source, kind: Box::new(kind) }
 	}
 }
@@ -237,7 +237,7 @@ pub enum InstrKindCntrl<'a> {
 }
 
 impl<'a> InstrCntrl<'a> {
-	fn new(source: &'a str, kind: InstrKindCntrl<'a>) -> Self {
+	pub fn new(source: &'a str, kind: InstrKindCntrl<'a>) -> Self {
 		Self { source, kind: Box::new(kind) }
 	}
 }

@@ -36,7 +36,7 @@ impl<'a> Program<'a> {
 				}
 			}
 		}
-		return Ok(Value::None);
+		Ok(Value::None)
 	}
 
 	fn exec_instr(
@@ -46,11 +46,11 @@ impl<'a> Program<'a> {
 	) -> Result<Value, Interruption<'a>> {
 		Ok(match &instr.kind {
 			InstrKind::Definition(var_idx, op) => {
-				locals[*var_idx] = self.exec_instr(locals, &op)?;
+				locals[*var_idx] = self.exec_instr(locals, op)?;
 				Value::None
 			}
 			InstrKind::Assignment(var_idx, op) => {
-				locals[*var_idx] = self.exec_instr(locals, &op)?;
+				locals[*var_idx] = self.exec_instr(locals, op)?;
 				Value::None
 			}
 			InstrKind::Return(expr) => {
@@ -133,7 +133,7 @@ impl Value {
 
 	fn is_true(&self) -> bool {
 		match self {
-			Value::String(value) => &value[..] != "",
+			Value::String(value) => !value[..].is_empty(),
 			Value::Int(value) => *value != 0,
 			Value::Float(value) => *value != 0.0,
 			Value::Bool(value) => *value,

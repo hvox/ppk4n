@@ -186,12 +186,12 @@ impl<'a, T> ExprKind<'a, T> {
 				Box::new(expr.try_map_annotations(f)?),
 				Block {
 					source: then.source,
-					stmts: try_map(then.stmts, |stmt| Ok(stmt.try_map_annotations(f)?))?,
+					stmts: try_map(then.stmts, |stmt| stmt.try_map_annotations(f))?,
 				},
 				match otherwise {
 					Some(block) => Some(Block {
 						source: block.source,
-						stmts: try_map(block.stmts, |stmt| Ok(stmt.try_map_annotations(f)?))?,
+						stmts: try_map(block.stmts, |stmt| stmt.try_map_annotations(f))?,
 					}),
 					None => None,
 				},
@@ -200,7 +200,7 @@ impl<'a, T> ExprKind<'a, T> {
 				Box::new(expr.try_map_annotations(f)?),
 				Block {
 					source: block.source,
-					stmts: try_map(block.stmts, |stmt| Ok(stmt.try_map_annotations(f)?))?,
+					stmts: try_map(block.stmts, |stmt| stmt.try_map_annotations(f))?,
 				},
 			),
 			Return(expr) => Return(Box::new(expr.try_map_annotations(f)?)),
@@ -210,10 +210,10 @@ impl<'a, T> ExprKind<'a, T> {
 				Binary(Box::new(lhs.try_map_annotations(f)?), op, Box::new(rhs.try_map_annotations(f)?))
 			}
 			FunctionCall(name, args) => {
-				FunctionCall(name, try_map(args, |arg| Ok(arg.try_map_annotations(f)?))?)
+				FunctionCall(name, try_map(args, |arg| arg.try_map_annotations(f))?)
 			}
 			MethodCall(obj, func, args) => {
-				MethodCall(obj, func, try_map(args, |arg| Ok(arg.try_map_annotations(f)?))?)
+				MethodCall(obj, func, try_map(args, |arg| arg.try_map_annotations(f))?)
 			}
 			Variable(x) => Variable(x),
 			Integer(x) => Integer(x),

@@ -197,7 +197,7 @@ impl<'a, 'b> FunctionTypechecker<'a, 'b> {
 			}
 			_ => unreachable!(),
 		};
-		Ok(InstrCntrl { source, kind: Box::new(kind) })
+		Ok(InstrCntrl::new(source, kind))
 	}
 
 	fn typecheck_bool(&mut self, expr: Expr<'a, ExprDataWithTypeId>) -> Result<InstrBool<'a>, TypeError<'a>> {
@@ -217,9 +217,22 @@ impl<'a, 'b> FunctionTypechecker<'a, 'b> {
 	}
 
 	fn typecheck_u64(&mut self, expr: Expr<'a, ExprDataWithTypeId>) -> Result<InstrU64<'a>, TypeError<'a>> {
+		use InstrKindU64::*;
 		let source = expr.source;
 		let kind = match expr.kind {
-			_ => todo!(),
+			ExprKind::Integer(value) => Value(value),
+			ExprKind::Variable(name) => Variable(self.scope[&name[..]]),
+			ExprKind::Grouping(expr) => *self.typecheck_u64(*expr)?.kind,
+			ExprKind::Unary(unary_op, expr) => todo!(),
+			ExprKind::Binary(lhs, op, rhs) => match op.kind {
+				BinOpKind::Minus => Sub(self.typecheck_u64(*lhs)?, self.typecheck_u64(*rhs)?),
+				BinOpKind::Plus => Add(self.typecheck_u64(*lhs)?, self.typecheck_u64(*rhs)?),
+				BinOpKind::Slash => Div(self.typecheck_u64(*lhs)?, self.typecheck_u64(*rhs)?),
+				BinOpKind::Star => Mult(self.typecheck_u64(*lhs)?, self.typecheck_u64(*rhs)?),
+				_ => unreachable!(),
+			},
+			ExprKind::FunctionCall(expr, vec) => todo!(),
+			_ => unreachable!(),
 		};
 		Ok(InstrU64 { source, kind: Box::new(kind) })
 	}
@@ -298,7 +311,7 @@ impl<'a, 'b> FunctionTypechecker<'a, 'b> {
 			Type::F64 => InstrKind::F64(self.typecheck_f64(expr)?),
 			Type::Str => InstrKind::Str(self.typecheck_str(expr)?),
 			Type::Vec(_) => {
-				let Type::Vec(typ) = self.types.actualize_type(expr.type_id.clone()) else { unreachable!() };
+				let Type::Vec(typ) = self.types.actualize_type(expr.type_id) else { unreachable!() };
 				InstrKind::Vec(self.typecheck_vec(expr)?, (*typ).clone())
 			}
 		};
@@ -309,7 +322,7 @@ impl<'a, 'b> FunctionTypechecker<'a, 'b> {
 		let expr = expr
 			.add_annotations(|| self.types.new_type())
 			.try_foreach(&mut |t, source, kind| {
-				Ok(match &kind {
+				match &kind {
 					ExprKind::Print(expr) => self.types[t] = UnresolvedType::Unit,
 					ExprKind::Println(expr) => self.types[t] = UnresolvedType::Unit,
 					ExprKind::Definition(name, typename, expr) => {
@@ -402,7 +415,8 @@ impl<'a, 'b> FunctionTypechecker<'a, 'b> {
 						}
 					}
 					_ => unreachable!(),
-				})
+				};
+				Ok(())
 			})?
 			.map_annotations(&mut |t, _| ExprDataWithTypeId { type_id: t });
 		Ok(expr)

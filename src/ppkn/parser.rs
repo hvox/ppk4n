@@ -405,11 +405,11 @@ impl<'a> Parser<'a> {
 
 	fn unary(&mut self) -> Result<Expr<'a>, SyntaxError<'a>> {
 		let start_position = self.position;
-		if let Ok(_) = self.expect(TokenKind::LeftParen) {
-			return Ok(self.expression().map_err(|err| {
+		if self.expect(TokenKind::LeftParen).is_ok() {
+			return self.expression().map_err(|err| {
 				self.position = start_position;
 				err
-			})?);
+			});
 		}
 		use TokenKind::*;
 		let kind = match &self.tokens[self.position].kind {

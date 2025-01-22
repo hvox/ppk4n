@@ -3,7 +3,7 @@ use indexmap::IndexMap;
 use std::{cell::Cell, hash::Hash, mem::swap, ops::Index};
 
 pub fn try_map<T, R, E>(xs: impl IntoIterator<Item = T>, f: impl FnMut(T) -> Result<R, E>) -> Result<Vec<R>, E> {
-	Ok(xs.into_iter().map(f).collect::<Result<_, _>>()?)
+	xs.into_iter().map(f).collect::<Result<_, _>>()
 }
 
 pub fn try_imap<T, K, V, E>(
@@ -13,7 +13,7 @@ pub fn try_imap<T, K, V, E>(
 where
 	K: Hash + Eq,
 {
-	Ok(xs.into_iter().map(f).collect::<Result<IndexMap<K, V>, E>>()?)
+	xs.into_iter().map(f).collect::<Result<IndexMap<K, V>, E>>()
 }
 
 pub struct Dsu {
