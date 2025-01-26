@@ -154,6 +154,10 @@ impl<'a> Program<'a> {
 			Variable(idx) => locals[*idx],
 			Value(_) => todo!(),
 			Call(_) => todo!(),
+			Empty => {
+				let vec = Rc::new(Vec::<u64>::new());
+				Rc::into_raw(vec) as u64
+			}
 		})
 	}
 

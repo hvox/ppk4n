@@ -302,6 +302,7 @@ impl<'a, 'b> FunctionTypechecker<'a, 'b> {
 		use InstrKindVec::*;
 		let source = expr.source;
 		let kind = match expr.kind {
+			ExprKind::Variable(name) if &*name == "[]" => Empty,
 			ExprKind::Variable(name) => Variable(self.scope[&name[..]]),
 			_ => unreachable!(),
 		};

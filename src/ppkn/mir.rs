@@ -199,6 +199,7 @@ pub enum InstrKindVec<'a> {
 	Variable(usize),
 	Value(Str),
 	Call(usize),
+	Empty,
 }
 
 impl<'a> InstrVec<'a> {
