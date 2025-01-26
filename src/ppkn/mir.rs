@@ -221,6 +221,7 @@ pub enum InstrKindCntrl<'a> {
 	DefF64(usize, InstrF64<'a>),
 	DefStr(usize, InstrStr<'a>),
 	DefBool(usize, InstrBool<'a>),
+	DefVec(usize, InstrVec<'a>, Type),
 	SetI64(usize, InstrI64<'a>),
 	SetU64(usize, InstrU64<'a>),
 	SetF64(usize, InstrF64<'a>),

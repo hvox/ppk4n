@@ -51,6 +51,7 @@ impl<'a> Program<'a> {
 			InstrKindCntrl::DefF64(id, value) | InstrKindCntrl::SetF64(id, value) => {
 				locals[*id] = (self.eval_f64(locals, value)?).to_bits()
 			}
+			InstrKindCntrl::DefVec(id, value, typ) => locals[*id] = self.eval_vec(locals, value, typ)?,
 			InstrKindCntrl::SetVec(id) => {
 				let vec = Rc::new(Vec::<u64>::new());
 				locals[*id] = Rc::into_raw(vec) as u64;

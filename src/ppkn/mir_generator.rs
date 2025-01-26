@@ -166,17 +166,24 @@ impl<'a, 'b> FunctionTypechecker<'a, 'b> {
 		let kind = match expr.kind {
 			ExprKind::Print(expr) => PrintStr(converted_to_str(self.typecheck_expr(*expr)?)),
 			ExprKind::Println(expr) => PrintlnStr(converted_to_str(self.typecheck_expr(*expr)?)),
-			ExprKind::Assignment(name, expr) | ExprKind::Definition(name, _, expr) => {
-				match Type::from(&self.types[expr.type_id]) {
-					Type::Unit => Drop(self.typecheck_expr(*expr)?),
-					Type::Bool => SetBool(self.scope[name], self.typecheck_bool(*expr)?),
-					Type::I64 => SetI64(self.scope[name], self.typecheck_i64(*expr)?),
-					Type::U64 => SetU64(self.scope[name], self.typecheck_u64(*expr)?),
-					Type::F64 => SetF64(self.scope[name], self.typecheck_f64(*expr)?),
-					Type::Str => SetStr(self.scope[name], self.typecheck_str(*expr)?),
-					Type::Vec(_) => SetVec(self.scope[name]),
-				}
-			}
+			ExprKind::Definition(name, _, expr) => match Type::from(&self.types[expr.type_id]) {
+				Type::Unit => Drop(self.typecheck_expr(*expr)?),
+				Type::Bool => DefBool(self.scope[name], self.typecheck_bool(*expr)?),
+				Type::I64 => DefI64(self.scope[name], self.typecheck_i64(*expr)?),
+				Type::U64 => DefU64(self.scope[name], self.typecheck_u64(*expr)?),
+				Type::F64 => DefF64(self.scope[name], self.typecheck_f64(*expr)?),
+				Type::Str => DefStr(self.scope[name], self.typecheck_str(*expr)?),
+				Type::Vec(t) => DefVec(self.scope[name], self.typecheck_vec(*expr)?, (*t).clone()),
+			},
+			ExprKind::Assignment(name, expr) => match Type::from(&self.types[expr.type_id]) {
+				Type::Unit => Drop(self.typecheck_expr(*expr)?),
+				Type::Bool => SetBool(self.scope[name], self.typecheck_bool(*expr)?),
+				Type::I64 => SetI64(self.scope[name], self.typecheck_i64(*expr)?),
+				Type::U64 => SetU64(self.scope[name], self.typecheck_u64(*expr)?),
+				Type::F64 => SetF64(self.scope[name], self.typecheck_f64(*expr)?),
+				Type::Str => SetStr(self.scope[name], self.typecheck_str(*expr)?),
+				Type::Vec(_) => SetVec(self.scope[name]),
+			},
 			ExprKind::If(expr, block, block1) => todo!(),
 			ExprKind::While(expr, block) => todo!(),
 			ExprKind::Return(expr) => todo!(),
