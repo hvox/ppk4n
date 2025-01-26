@@ -9,6 +9,7 @@ pub mod interpreter;
 pub mod mir_generator;
 pub mod mir;
 pub mod mir_interpreter;
+pub mod transpiler;
 
 use mir::Program;
 

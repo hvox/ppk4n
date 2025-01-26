@@ -1,24 +1,37 @@
 use std::{env::args, fs, process::exit};
 
-use ppkn::run;
+use ppkn::{parse, run, PpknError};
 
 mod ppkn;
 mod utils;
 
 fn main() {
 	let args: Vec<_> = args().collect();
-	let source = fs::read_to_string(&args[1]).unwrap();
+	match args[1].as_str() {
+		"into-python" => {
+			let source = fs::read_to_string(&args[2]).unwrap();
+			let program = checked(&source, parse(&source));
+			print!("{}", program.transpile_to_python());
+		}
+		_ => {
+			let source = fs::read_to_string(&args[1]).unwrap();
+			checked(&source, run(&source));
+		}
+	}
+}
 
-	match run(&source) {
-		Ok(program) => program,
+fn checked<'a, T>(source: &'a str, result: Result<T, impl Into<PpknError<'a>>>) -> T {
+	match result {
+		Ok(something) => something,
 		Err(error) => {
+			let error = error.into();
 			let (row, column, line) = find_line_with(&source, error.location);
 			println!("{:3}: {}", row, line.replace("\t", " "));
 			println!("    {}{}", " ".repeat(column), "^".repeat(error.location.len()));
 			println!("{}: {}", error.typ, error.message);
 			exit(1);
 		}
-	};
+	}
 }
 
 fn find_line_with<'a>(text: &'a str, content: &str) -> (usize, usize, &'a str) {
