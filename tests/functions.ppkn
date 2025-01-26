@@ -1,5 +1,5 @@
 fun f(x: int, y: int) {
-    print x
+	print x
 	println y
 }
 
