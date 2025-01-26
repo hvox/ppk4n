@@ -1,23 +1,67 @@
-use std::{env::args, fs, process::exit};
+use std::{
+	env::args,
+	fs,
+	hash::{Hash, Hasher},
+	process::exit,
+};
 
 use ppkn::{parse, run, PpknError};
+use utils::stringify_lossy;
 
 mod ppkn;
 mod utils;
 
 fn main() {
 	let args: Vec<_> = args().collect();
+	if let Some(data) = get_packed_data() {
+		let source = String::from_utf8(data).unwrap();
+		return checked(&source, run(&source));
+	}
 	match args[1].as_str() {
 		"into-python" => {
 			let source = fs::read_to_string(&args[2]).unwrap();
 			let program = checked(&source, parse(&source));
 			print!("{}", program.transpile_to_python());
 		}
+		"into-exe" => {
+			let source = fs::read_to_string(&args[2]).unwrap();
+			checked(&source, parse(&source));
+			fs::write(&args[3], &pack_data(source.as_bytes())).unwrap();
+			#[cfg(target_family = "unix")]
+			{
+				use std::os::unix::fs::PermissionsExt;
+				let mut perms = fs::metadata(&args[3]).unwrap().permissions();
+				perms.set_mode(perms.mode() | 0o111);
+				let _ = fs::set_permissions(&args[3], perms);
+			}
+		}
 		_ => {
 			let source = fs::read_to_string(&args[1]).unwrap();
 			checked(&source, run(&source));
 		}
 	}
+}
+
+fn get_packed_data() -> Option<Vec<u8>> {
+	let bytes = fs::read(std::env::current_exe().unwrap()).unwrap();
+	let mut hasher = std::hash::DefaultHasher::new();
+	bytes[..bytes.len() - 8].hash(&mut hasher);
+	let hash = u64::from_le_bytes(bytes[bytes.len() - 8..].try_into().unwrap());
+	if hasher.finish() != hash {
+		return None;
+	}
+	let size = u32::from_le_bytes(bytes[bytes.len() - 12..bytes.len() - 8].try_into().unwrap()) as usize;
+	Some(bytes[bytes.len() - 12 - size..bytes.len() - 12].to_vec())
+}
+
+fn pack_data(data: &[u8]) -> Vec<u8> {
+	let mut bytes = fs::read(std::env::current_exe().unwrap()).unwrap();
+	bytes.extend(data);
+	bytes.extend((data.len() as u32).to_le_bytes());
+	let mut hasher = std::hash::DefaultHasher::new();
+	bytes[..].hash(&mut hasher);
+	bytes.extend(hasher.finish().to_le_bytes());
+	bytes
 }
 
 fn checked<'a, T>(source: &'a str, result: Result<T, impl Into<PpknError<'a>>>) -> T {

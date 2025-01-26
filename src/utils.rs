@@ -53,3 +53,22 @@ impl Dsu {
 		u
 	}
 }
+
+pub fn stringify_lossy(bytes: &[u8]) -> String {
+	let mut string = String::new();
+	for chunk in bytes.utf8_chunks() {
+		for (i, ch) in chunk.valid().char_indices() {
+			if ch.escape_debug().count() == 1 {
+				string.push(ch);
+			} else {
+				for byte in chunk.valid()[i..i + ch.len_utf8()].bytes() {
+					string.push_str(&format!("\\{:02X}", byte));
+				}
+			}
+		}
+		for byte in chunk.invalid() {
+			string.push_str(&format!("\\{:02X}", byte));
+		}
+	}
+	string
+}
