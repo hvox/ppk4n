@@ -452,7 +452,7 @@ struct TypesDsu {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct TypeId(u32);
+pub struct TypeId(u32);
 
 impl TypesDsu {
 	fn new() -> Self {
