@@ -23,6 +23,11 @@ fn main() {
 			let program = checked(&source, parse(&source));
 			print!("{}", program.transpile_to_python());
 		}
+		"into-wasm" => {
+			let source = fs::read_to_string(&args[2]).unwrap();
+			let program = checked(&source, parse(&source));
+			println!("{}", stringify_lossy(&program.compile_to_wasm()));
+		}
 		"into-exe" => {
 			let source = fs::read_to_string(&args[2]).unwrap();
 			checked(&source, parse(&source));

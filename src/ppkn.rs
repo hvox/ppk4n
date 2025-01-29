@@ -10,6 +10,7 @@ pub mod mir_generator;
 pub mod mir;
 pub mod mir_interpreter;
 pub mod transpiler;
+pub mod mir_compiler;
 
 use mir::Program;
 

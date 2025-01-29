@@ -33,7 +33,7 @@ impl<T> Deref for Function<'_, T> {
 	}
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Type {
 	Unit,
 	Bool,
