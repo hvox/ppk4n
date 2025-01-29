@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 #[derive(Clone, Debug, PartialEq)]
 pub struct Token<'a> {
 	pub source: &'a str,

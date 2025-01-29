@@ -1,3 +1,4 @@
+#![allow(unused)]
 use indexmap::IndexMap;
 
 use super::ast::{self, BinOpKind};

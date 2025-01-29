@@ -1,3 +1,4 @@
+#![allow(unused)]
 use std::{ops::Deref, rc::Rc};
 
 // TODO: rename to module

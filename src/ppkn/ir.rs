@@ -1,3 +1,4 @@
+#![allow(unused)]
 use indexmap::IndexMap;
 
 // TODO: rename to module

@@ -1,4 +1,4 @@
-#![allow(unused_variables)]
+#![allow(unused)]
 use std::rc::Rc;
 
 use super::ir::{Instr, InstrKind, Program, Type};
