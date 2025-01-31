@@ -1,6 +1,10 @@
 #![allow(unused)]
 use indexmap::IndexMap;
-use std::{cell::Cell, hash::Hash, mem::swap, ops::Index};
+use std::{cell::Cell, hash::Hash, mem::swap, ops::Index, rc::Rc};
+
+pub fn map<T, R>(xs: impl IntoIterator<Item = T>, f: impl FnMut(T) -> R) -> Vec<R> {
+	xs.into_iter().map(f).collect()
+}
 
 pub fn try_map<T, R, E>(xs: impl IntoIterator<Item = T>, f: impl FnMut(T) -> Result<R, E>) -> Result<Vec<R>, E> {
 	xs.into_iter().map(f).collect::<Result<_, _>>()
@@ -71,4 +75,75 @@ pub fn stringify_lossy(bytes: &[u8]) -> String {
 		}
 	}
 	string
+}
+
+pub trait Leb128<T> {
+	fn pack(&mut self, value: T);
+}
+
+impl Leb128<i64> for Vec<u8> {
+	fn pack(&mut self, value: i64) {
+		let mut value = value;
+		loop {
+			self.push(0x7f & value as u8 + (value > 0x7f) as u8);
+			value >>= 7;
+			if value == 0 {
+				break;
+			}
+		}
+		todo!("Wrong sign");
+	}
+}
+
+impl Leb128<usize> for Vec<u8> {
+	fn pack(&mut self, value: usize) {
+		let mut value = value;
+		loop {
+			self.push(0x7f & value as u8 + (value > 0x7f) as u8);
+			value >>= 7;
+			if value == 0 {
+				break;
+			}
+		}
+	}
+}
+
+impl Leb128<i32> for Vec<u8> {
+	fn pack(&mut self, value: i32) {
+		self.pack(value as i64);
+	}
+}
+
+impl Leb128<u32> for Vec<u8> {
+	fn pack(&mut self, value: u32) {
+		self.pack(value as usize);
+	}
+}
+
+impl Leb128<&str> for Vec<u8> {
+	fn pack(&mut self, string: &str) {
+		self.pack(string.as_bytes());
+	}
+}
+
+impl Leb128<Rc<str>> for Vec<u8> {
+	fn pack(&mut self, string: Rc<str>) {
+		self.pack(string.as_bytes());
+	}
+}
+
+impl Leb128<Vec<Vec<u8>>> for Vec<u8> {
+	fn pack(&mut self, array: Vec<Vec<u8>>) {
+		self.pack(array.len());
+		for bytes in array.into_iter() {
+			self.extend(bytes);
+		}
+	}
+}
+
+impl Leb128<&[u8]> for Vec<u8> {
+	fn pack(&mut self, bytes: &[u8]) {
+		self.pack(bytes.len());
+		self.extend(bytes);
+	}
 }
