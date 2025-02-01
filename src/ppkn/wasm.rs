@@ -6,7 +6,7 @@ use ordered_float::NotNan;
 use crate::utils::Leb128;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct WebAssemblyModule {
+pub struct WebAssemblyModule {
 	funcs: IndexMap<Rc<str>, Func>,
 	mems: Vec<MemoryLimit>,
 	globals: Vec<GlobalVariable>,

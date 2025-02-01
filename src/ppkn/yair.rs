@@ -44,7 +44,7 @@ pub struct Type {
 pub struct Expr {
 	// TODO source: &'source str
 	pub kind: ExprKind,
-	pub typ: Str,
+	pub typ: Type,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

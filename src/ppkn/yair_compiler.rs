@@ -4,10 +4,12 @@ use indexmap::IndexSet;
 use crate::utils::stringify_lossy;
 
 use super::yair::*;
+use super::wasm;
 
 impl Program {
-	pub fn compile_to_wasm(&self) -> Vec<u8> {
-		Compiler::new(self).compile()
+	pub fn to_wasm(&self) -> wasm::WebAssemblyModule {
+		Compiler::new(self).compile();
+		todo!()
 	}
 }
 
