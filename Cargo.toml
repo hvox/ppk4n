@@ -5,3 +5,4 @@ edition = "2021"
 
 [dependencies]
 indexmap = "2.7.0"
+ordered-float = "4.6.0"

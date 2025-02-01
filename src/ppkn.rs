@@ -1,18 +1,19 @@
-pub mod tokenizer;
-pub mod token;
-pub mod parser;
 pub mod ast;
-pub mod typechecker;
-pub mod ir;
 pub mod interpreter;
+pub mod ir;
+pub mod parser;
+pub mod token;
+pub mod tokenizer;
+pub mod typechecker;
 
-pub mod mir_generator;
 pub mod mir;
+pub mod mir_compiler;
+pub mod mir_generator;
 pub mod mir_interpreter;
 pub mod mir_to_yair_translator;
 pub mod transpiler;
-pub mod mir_compiler;
 
+pub mod wasm;
 pub mod yair;
 pub mod yair_compiler;
 
