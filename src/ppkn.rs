@@ -17,6 +17,9 @@ pub mod wasm;
 pub mod yair;
 pub mod yair_compiler;
 
+pub mod yaira;
+pub mod yaira_typechecker;
+
 use mir::Program;
 
 pub struct PpknError<'a> {

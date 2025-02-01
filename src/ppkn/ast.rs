@@ -25,6 +25,7 @@ pub enum ExprKind<'a, T> {
 	If(Box<Expr<'a, T>>, Block<'a, T>, Option<Block<'a, T>>),
 	While(Box<Expr<'a, T>>, Block<'a, T>),
 	Return(Box<Expr<'a, T>>),
+	Indented(Block<'a, T>),
 	Function(Identifier<'a>, Vec<(Identifier<'a>, Typename<'a>)>, Block<'a, T>),
 	Class(Identifier<'a>, Vec<(Identifier<'a>, Typename<'a>)>),
 	Import(Identifier<'a>),
@@ -156,9 +157,7 @@ impl<'a, T> ExprKind<'a, T> {
 			Return(expr) => Return(Box::new(expr.map_annotations(f))),
 			Grouping(expr) => Grouping(Box::new(expr.map_annotations(f))),
 			Unary(op, expr) => Unary(op, Box::new(expr.map_annotations(f))),
-			Binary(lhs, op, rhs) => {
-				Binary(Box::new(lhs.map_annotations(f)), op, Box::new(rhs.map_annotations(f)))
-			}
+			Binary(lhs, op, rhs) => Binary(Box::new(lhs.map_annotations(f)), op, Box::new(rhs.map_annotations(f))),
 			FunctionCall(name, args) => {
 				FunctionCall(name, args.into_iter().map(|stmt| stmt.map_annotations(f)).collect())
 			}
@@ -185,10 +184,7 @@ impl<'a, T> ExprKind<'a, T> {
 			Assignment(var, expr) => Assignment(var, Box::new(expr.try_map_annotations(f)?)),
 			If(expr, then, otherwise) => If(
 				Box::new(expr.try_map_annotations(f)?),
-				Block {
-					source: then.source,
-					stmts: try_map(then.stmts, |stmt| stmt.try_map_annotations(f))?,
-				},
+				Block { source: then.source, stmts: try_map(then.stmts, |stmt| stmt.try_map_annotations(f))? },
 				match otherwise {
 					Some(block) => Some(Block {
 						source: block.source,
@@ -199,10 +195,7 @@ impl<'a, T> ExprKind<'a, T> {
 			),
 			While(expr, block) => While(
 				Box::new(expr.try_map_annotations(f)?),
-				Block {
-					source: block.source,
-					stmts: try_map(block.stmts, |stmt| stmt.try_map_annotations(f))?,
-				},
+				Block { source: block.source, stmts: try_map(block.stmts, |stmt| stmt.try_map_annotations(f))? },
 			),
 			Return(expr) => Return(Box::new(expr.try_map_annotations(f)?)),
 			Grouping(expr) => Grouping(Box::new(expr.try_map_annotations(f)?)),
@@ -210,12 +203,8 @@ impl<'a, T> ExprKind<'a, T> {
 			Binary(lhs, op, rhs) => {
 				Binary(Box::new(lhs.try_map_annotations(f)?), op, Box::new(rhs.try_map_annotations(f)?))
 			}
-			FunctionCall(name, args) => {
-				FunctionCall(name, try_map(args, |arg| arg.try_map_annotations(f))?)
-			}
-			MethodCall(obj, func, args) => {
-				MethodCall(obj, func, try_map(args, |arg| arg.try_map_annotations(f))?)
-			}
+			FunctionCall(name, args) => FunctionCall(name, try_map(args, |arg| arg.try_map_annotations(f))?),
+			MethodCall(obj, func, args) => MethodCall(obj, func, try_map(args, |arg| arg.try_map_annotations(f))?),
 			Variable(x) => Variable(x),
 			Integer(x) => Integer(x),
 			String(x) => String(x),
@@ -230,6 +219,12 @@ impl<'a, T> Deref for Expr<'a, T> {
 
 	fn deref(&self) -> &Self::Target {
 		&self.annotations
+	}
+}
+
+impl<'a> Block<'a, ()> {
+	pub fn into_expr(self) -> Expr<'a, ()> {
+		Expr { source: self.source, kind: ExprKind::Indented(self), annotations: () }
 	}
 }
 
@@ -273,19 +268,19 @@ where
 			ExprKind::Unary(unary_op, expr) => todo!(),
 			ExprKind::Binary(lhs, bin_op, rhs) => {
 				"(".to_string()
-					+ &lhs.to_string() + " "
-					+ match bin_op.kind {
-						BinOpKind::Minus => "-",
-						BinOpKind::Plus => "+",
-						BinOpKind::Slash => "/",
-						BinOpKind::Star => "*",
-						BinOpKind::Greater => ">",
-						BinOpKind::GreaterEqual => ">=",
-						BinOpKind::Less => "<",
-						BinOpKind::LessEqual => "<=",
-						BinOpKind::BangEqual => "!=",
-						BinOpKind::EqualEqual => "==",
-					} + " " + &rhs.to_string()
+					+ &lhs.to_string()
+					+ " " + match bin_op.kind {
+					BinOpKind::Minus => "-",
+					BinOpKind::Plus => "+",
+					BinOpKind::Slash => "/",
+					BinOpKind::Star => "*",
+					BinOpKind::Greater => ">",
+					BinOpKind::GreaterEqual => ">=",
+					BinOpKind::Less => "<",
+					BinOpKind::LessEqual => "<=",
+					BinOpKind::BangEqual => "!=",
+					BinOpKind::EqualEqual => "==",
+				} + " " + &rhs.to_string()
 					+ ")"
 			}
 			_ => todo!(),
