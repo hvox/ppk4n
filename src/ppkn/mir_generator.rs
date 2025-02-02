@@ -147,20 +147,13 @@ impl<'a, 'b> FunctionTypechecker<'a, 'b> {
 			name: self.signature.name.clone(),
 			params: self.signature.params.clone(),
 			result: self.signature.result.clone(),
-			locals: self
-				.locals
-				.into_iter()
-				.map(|(name, typ)| (name, self.types.actualize_type(typ)))
-				.collect(),
+			locals: self.locals.into_iter().map(|(name, typ)| (name, self.types.actualize_type(typ))).collect(),
 			body: typechecked_body,
 			extra: (),
 		})
 	}
 
-	fn typecheck_stmt(
-		&mut self,
-		expr: Expr<'a, ExprDataWithTypeId>,
-	) -> Result<InstrCntrl<'a>, TypeError<'a>> {
+	fn typecheck_stmt(&mut self, expr: Expr<'a, ExprDataWithTypeId>) -> Result<InstrCntrl<'a>, TypeError<'a>> {
 		let source = expr.source;
 		use InstrKindCntrl::*;
 		let kind = match expr.kind {
@@ -189,18 +182,16 @@ impl<'a, 'b> FunctionTypechecker<'a, 'b> {
 			ExprKind::Return(expr) => todo!(),
 			ExprKind::Variable(_) => todo!(),
 			ExprKind::Grouping(expr) => todo!(),
-			ExprKind::FunctionCall(name, params) => {
-				Call(self.typechecker.signatures.get_index_of(name).unwrap(), {
-					let mut typed_params = vec![];
-					for param in params {
-						typed_params.push(self.typecheck_expr(param)?);
-					}
-					typed_params
-				})
-			}
+			ExprKind::FunctionCall(name, params) => Call(self.typechecker.signatures.get_index_of(name).unwrap(), {
+				let mut typed_params = vec![];
+				for param in params {
+					typed_params.push(self.typecheck_expr(param)?);
+				}
+				typed_params
+			}),
 			ExprKind::MethodCall(obj, method, vec) => {
 				assert!(method == "push");
-				Push(self.scope[obj], self.typecheck_expr(vec[0].clone())?)
+				Push(self.scope[obj.source], self.typecheck_expr(vec[0].clone())?)
 			}
 			_ => unreachable!(),
 		};
@@ -402,12 +393,12 @@ impl<'a, 'b> FunctionTypechecker<'a, 'b> {
 						self.types.merge(t, expected_typ).unwrap()
 					}
 					ExprKind::MethodCall(obj, method, args) => {
-						let Some(variable_idx) = self.scope.get(&obj[..]) else {
+						let Some(variable_idx) = self.scope.get(obj.source) else {
 							return Err(TypeError {
 								location: source,
 								message: Box::leak(Box::from(format!(
 									"Variable {} is not found in current scope",
-									obj
+									obj.source
 								))),
 							});
 						};
@@ -432,11 +423,7 @@ impl<'a, 'b> FunctionTypechecker<'a, 'b> {
 }
 
 impl<'a> Expr<'a, ExprDataWithTypeId> {
-	fn typed(
-		source: &'a str,
-		kind: ExprKind<'a, ExprDataWithTypeId>,
-		type_id: TypeId,
-	) -> Expr<'a, ExprDataWithTypeId> {
+	fn typed(source: &'a str, kind: ExprKind<'a, ExprDataWithTypeId>, type_id: TypeId) -> Expr<'a, ExprDataWithTypeId> {
 		Expr::from(source, kind, ExprDataWithTypeId { type_id })
 	}
 }

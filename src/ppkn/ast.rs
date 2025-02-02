@@ -39,7 +39,7 @@ pub enum ExprKind<'a, T> {
 	Unary(UnaryOp<'a>, Box<Expr<'a, T>>),
 	Binary(Box<Expr<'a, T>>, BinOp<'a>, Box<Expr<'a, T>>),
 	FunctionCall(Identifier<'a>, Vec<Expr<'a, T>>),
-	MethodCall(Identifier<'a>, Identifier<'a>, Vec<Expr<'a, T>>),
+	MethodCall(Box<Expr<'a, T>>, Identifier<'a>, Vec<Expr<'a, T>>),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -161,9 +161,11 @@ impl<'a, T> ExprKind<'a, T> {
 			FunctionCall(name, args) => {
 				FunctionCall(name, args.into_iter().map(|stmt| stmt.map_annotations(f)).collect())
 			}
-			MethodCall(obj, func, args) => {
-				MethodCall(obj, func, args.into_iter().map(|stmt| stmt.map_annotations(f)).collect())
-			}
+			MethodCall(obj, func, args) => MethodCall(
+				obj.map_annotations(f).into(),
+				func,
+				args.into_iter().map(|stmt| stmt.map_annotations(f)).collect(),
+			),
 			Variable(x) => Variable(x),
 			Integer(x) => Integer(x),
 			String(x) => String(x),
@@ -204,7 +206,9 @@ impl<'a, T> ExprKind<'a, T> {
 				Binary(Box::new(lhs.try_map_annotations(f)?), op, Box::new(rhs.try_map_annotations(f)?))
 			}
 			FunctionCall(name, args) => FunctionCall(name, try_map(args, |arg| arg.try_map_annotations(f))?),
-			MethodCall(obj, func, args) => MethodCall(obj, func, try_map(args, |arg| arg.try_map_annotations(f))?),
+			MethodCall(obj, func, args) => {
+				MethodCall(obj.try_map_annotations(f)?.into(), func, try_map(args, |arg| arg.try_map_annotations(f))?)
+			}
 			Variable(x) => Variable(x),
 			Integer(x) => Integer(x),
 			String(x) => String(x),

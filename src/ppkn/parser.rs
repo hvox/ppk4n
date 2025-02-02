@@ -230,10 +230,7 @@ impl<'a> Parser<'a> {
 			self.position = start_position;
 			err
 		})?;
-		Ok(Expr::new(
-			span(first_token.source, closing_brace.source),
-			ExprKind::Function(name.source, args, body),
-		))
+		Ok(Expr::new(span(first_token.source, closing_brace.source), ExprKind::Function(name.source, args, body)))
 	}
 
 	fn function_arguments(&mut self) -> Result<Vec<(Identifier<'a>, Typename<'a>)>, SyntaxError<'a>> {
@@ -277,11 +274,7 @@ impl<'a> Parser<'a> {
 			let rhs = self.arithmetic_expression()?;
 			expr = Expr::new(
 				span(expr.source, rhs.source),
-				ExprKind::Binary(
-					Box::new(expr),
-					BinOp { source: op.source, kind: binop_kind },
-					Box::new(rhs),
-				),
+				ExprKind::Binary(Box::new(expr), BinOp { source: op.source, kind: binop_kind }, Box::new(rhs)),
 			)
 		}
 		Ok(expr)
@@ -301,10 +294,7 @@ impl<'a> Parser<'a> {
 				Minus => BinOp { source, kind: BinOpKind::Minus },
 				_ => unreachable!(),
 			};
-			sum = Expr::new(
-				span(sum.source, factor.source),
-				ExprKind::Binary(Box::new(sum), op, Box::new(factor)),
-			)
+			sum = Expr::new(span(sum.source, factor.source), ExprKind::Binary(Box::new(sum), op, Box::new(factor)))
 		}
 		Ok(sum)
 	}
@@ -397,9 +387,10 @@ impl<'a> Parser<'a> {
 			self.position = start_position;
 			err
 		})?;
+		let target = Expr::new(object.source, ExprKind::Variable(object.source.into()));
 		return Ok(Expr::new(
 			span(self.tokens[start_position].source, end.source),
-			ExprKind::MethodCall(object.source, method.source, args),
+			ExprKind::MethodCall(target.into(), method.source, args),
 		));
 	}
 
