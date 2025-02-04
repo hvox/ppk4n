@@ -26,6 +26,8 @@ struct Typechecker {
 	pub fns: IndexMap<Str, Function>,
 	types: Types,
 	restype: TypeId,
+	// Maybe change it to indexmap?
+	// Like one continues indexmap instead of a bunch of vectors
 	scope: Vec<HashMap<Str, TypeId>>,
 }
 
@@ -34,6 +36,7 @@ struct Types {
 	// Types are stored in Disjoint Set Union data structure
 	// and derived types are stored only for leaders of sets.
 	leaders: Vec<Cell<u32>>,
+	// P.S. Will it be better to put indexmap here?
 	types: HashMap<u32, UncheckedType>,
 	unit: TypeId,
 	bool: TypeId,
@@ -286,7 +289,13 @@ impl Types {
 
 	fn clear(&mut self) {
 		self.leaders.clear();
-		self.leaders.extend((0..5).map(Cell::new));
+		self.leaders.extend((0..6).map(Cell::new));
+		// If field `self.types` was IndexMap,
+		// then `self.clear()` would have been
+		// simple truncate on the field.
+		// Right?
+		// Or keys get invalidated when `self.leaders` is reset?
+		// Is there workaround?
 		self.types.clear();
 		self.types.insert(self.unit.0, UncheckedType::Unit);
 		self.types.insert(self.bool.0, UncheckedType::Bool);
