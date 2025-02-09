@@ -21,6 +21,7 @@ pub mod yaira;
 pub mod yaira_typechecker;
 
 pub mod hir;
+pub mod hir_gen;
 
 use mir::Program;
 
