@@ -34,6 +34,8 @@ pub struct PpknError<'a> {
 pub fn parse(source: &str) -> Result<Program, PpknError> {
 	let tokens = tokenizer::tokenize(source);
 	let ast = parser::parse(tokens)?;
+	#[cfg(debug_assertions)]
+	println!("{:#?}", hir_gen::typecheck(&ast));
 	let program = mir_generator::typecheck(ast)?;
 	Ok(program)
 }

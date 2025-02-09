@@ -280,58 +280,50 @@ impl Typechecker {
 				BinOpKind::Minus => {
 					let lhs = self.typecheck_expr(lhs, expected_type);
 					let rhs = self.typecheck_expr(rhs, expected_type);
-					// hir::ExprKind::MethodCall("sub".into(), lhs.into(), vec![rhs])
-					todo!()
+					hir::ExprKind::MethodCall(lhs.into(), "sub".into(), vec![rhs])
 				}
 				BinOpKind::Plus => {
 					let lhs = self.typecheck_expr(lhs, expected_type);
 					let rhs = self.typecheck_expr(rhs, expected_type);
-					// hir::ExprKind::MethodCall("add".into(), lhs.into(), vec![rhs])
-					todo!()
+					hir::ExprKind::MethodCall(lhs.into(), "add".into(), vec![rhs])
 				}
 				BinOpKind::Slash => {
 					let lhs = self.typecheck_expr(lhs, expected_type);
 					let rhs = self.typecheck_expr(rhs, expected_type);
-					// hir::ExprKind::MethodCall("div".into(), lhs.into(), vec![rhs])
-					todo!()
+					hir::ExprKind::MethodCall(lhs.into(), "div".into(), vec![rhs])
 				}
 				BinOpKind::Star => {
 					let lhs = self.typecheck_expr(lhs, expected_type);
 					let rhs = self.typecheck_expr(rhs, expected_type);
-					// hir::ExprKind::MethodCall("mul".into(), lhs.into(), vec![rhs])
-					todo!()
+					hir::ExprKind::MethodCall(lhs.into(), "mul".into(), vec![rhs])
 				}
 				BinOpKind::Greater => {
 					self.types.unify(expected_type, self.types.bool);
 					let expected_type = self.types.add(UncheckedType::Unknown);
 					let lhs = self.typecheck_expr(lhs, expected_type);
 					let rhs = self.typecheck_expr(rhs, expected_type);
-					// hir::ExprKind::MethodCall("gt".into(), lhs.into(), vec![rhs])
-					todo!()
+					hir::ExprKind::MethodCall(lhs.into(), "gt".into(), vec![rhs])
 				}
 				BinOpKind::GreaterEqual => {
 					self.types.unify(expected_type, self.types.bool);
 					let expected_type = self.types.add(UncheckedType::Unknown);
 					let lhs = self.typecheck_expr(lhs, expected_type);
 					let rhs = self.typecheck_expr(rhs, expected_type);
-					// hir::ExprKind::MethodCall("ge".into(), lhs.into(), vec![rhs])
-					todo!()
+					hir::ExprKind::MethodCall(lhs.into(), "ge".into(), vec![rhs])
 				}
 				BinOpKind::Less => {
 					self.types.unify(expected_type, self.types.bool);
 					let expected_type = self.types.add(UncheckedType::Unknown);
 					let lhs = self.typecheck_expr(lhs, expected_type);
 					let rhs = self.typecheck_expr(rhs, expected_type);
-					// hir::ExprKind::MethodCall("lt".into(), lhs.into(), vec![rhs])
-					todo!()
+					hir::ExprKind::MethodCall(lhs.into(), "lt".into(), vec![rhs])
 				}
 				BinOpKind::LessEqual => {
 					self.types.unify(expected_type, self.types.bool);
 					let expected_type = self.types.add(UncheckedType::Unknown);
 					let lhs = self.typecheck_expr(lhs, expected_type);
 					let rhs = self.typecheck_expr(rhs, expected_type);
-					// hir::ExprKind::MethodCall("le".into(), lhs.into(), vec![rhs])
-					todo!()
+					hir::ExprKind::MethodCall(lhs.into(), "le".into(), vec![rhs])
 				}
 				BinOpKind::BangEqual => {
 					self.types.unify(expected_type, self.types.bool);
@@ -339,8 +331,11 @@ impl Typechecker {
 					let lhs = self.typecheck_expr(lhs, expected_type);
 					let rhs = self.typecheck_expr(rhs, expected_type);
 					hir::ExprKind::MethodCall(
-						hir::Expr { kind: hir::ExprKind::MethodCall(lhs.into(), "eq".into(), vec![rhs]), typ: todo!() }
-							.into(),
+						hir::Expr {
+							kind: hir::ExprKind::MethodCall(lhs.into(), "eq".into(), vec![rhs]),
+							typ: self.types.bool,
+						}
+						.into(),
 						"not".into(),
 						vec![],
 					)
@@ -350,8 +345,7 @@ impl Typechecker {
 					let expected_type = self.types.add(UncheckedType::Unknown);
 					let lhs = self.typecheck_expr(lhs, expected_type);
 					let rhs = self.typecheck_expr(rhs, expected_type);
-					// hir::ExprKind::MethodCall("eq".into(), lhs.into(), vec![rhs])
-					todo!()
+					hir::ExprKind::MethodCall(lhs.into(), "eq".into(), vec![rhs])
 				}
 			},
 			ExprKind::FunctionCall(fname, arguments) => {
