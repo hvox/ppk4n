@@ -397,10 +397,18 @@ impl<'a> Parser<'a> {
 	fn unary(&mut self) -> Result<Expr<'a>, SyntaxError<'a>> {
 		let start_position = self.position;
 		if self.expect(TokenKind::LeftParen).is_ok() {
-			return self.expression().map_err(|err| {
+			let content = self.expression().map_err(|err| {
 				self.position = start_position;
 				err
-			});
+			})?;
+			let end = self.expect(TokenKind::RightParen).map_err(|err| {
+				self.position = start_position;
+				err
+			})?;
+			return Ok(Expr::new(
+				span(&self.tokens[self.position].source, &end.source),
+				ExprKind::Grouping(content.into()),
+			));
 		}
 		use TokenKind::*;
 		let kind = match &self.tokens[self.position].kind {
