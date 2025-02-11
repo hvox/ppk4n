@@ -172,11 +172,17 @@ impl Typechecker {
 		let kind = match &expr.kind {
 			ExprKind::Print(expr) => {
 				self.types.unify(expected_type, self.types.unit).expect("Type Error");
-				hir::ExprKind::FnCall(Str::from("print"), vec![self.typecheck_expr(expr, self.types.str)])
+				let mut args = vec![];
+				let expected_type = self.types.add(UncheckedType::Unknown);
+				args.push(self.typecheck_expr(expr, expected_type));
+				hir::ExprKind::FnCall(Str::from("print"), args)
 			}
 			ExprKind::Println(expr) => {
 				self.types.unify(expected_type, self.types.unit).expect("Type Error");
-				hir::ExprKind::FnCall(Str::from("println"), vec![self.typecheck_expr(expr, self.types.str)])
+				let mut args = vec![];
+				let expected_type = self.types.add(UncheckedType::Unknown);
+				args.push(self.typecheck_expr(expr, expected_type));
+				hir::ExprKind::FnCall(Str::from("println"), args)
 			}
 			ExprKind::Definition(varname, typename, expr) => {
 				panic!("Variable declaration is not allowed here");
