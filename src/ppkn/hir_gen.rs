@@ -151,9 +151,10 @@ impl Typechecker {
 				} else {
 					self.types.add_exact(&self.parse_type(typename))
 				};
+				let value = self.typecheck_expr(value, typ);
 				let scope = self.scope.last_mut().unwrap();
 				scope.insert(name.clone(), typ);
-				hir::Stmt::Def(name, self.typecheck_expr(value, typ))
+				hir::Stmt::Def(name, value)
 			}
 			ExprKind::If(_, _, _) | ExprKind::Indented(_) => {
 				hir::Stmt::Expr(self.typecheck_expr(stmt, self.types.unit))
