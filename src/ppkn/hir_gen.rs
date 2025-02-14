@@ -30,6 +30,7 @@ struct Typechecker {
 	// Maybe change it to indexmap?
 	// Like one continues indexmap instead of a bunch of vectors
 	scope: Vec<HashMap<Str, TypeId>>,
+	std_api: HashMap<(UncheckedType, &'static str), (Vec<UncheckedType>, UncheckedType)>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -47,7 +48,7 @@ struct Types {
 	str: TypeId,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 enum UncheckedType {
 	Unknown,
 	Integer,
@@ -66,7 +67,24 @@ struct TypeId(u32);
 
 impl Typechecker {
 	fn new() -> Self {
-		Self { fns: IndexMap::new(), types: Types::new(), restype: TypeId(0), scope: vec![] }
+		let mut typechecker = Self {
+			fns: IndexMap::new(),
+			types: Types::new(),
+			restype: TypeId(0),
+			scope: vec![],
+			std_api: HashMap::new(),
+		};
+		let api_tsv = include_str!("hir_std_api.tsv");
+		for line in api_tsv.lines().skip(1) {
+			let row = line.split("\t").collect::<Vec<_>>();
+			let self_type = typechecker.parse_unchecked_type(row[0]);
+			let method = row[1];
+			let params =
+				row[2].split(", ").filter(|&x| x != "").map(|typ| typechecker.parse_unchecked_type(typ)).collect();
+			let result = typechecker.parse_unchecked_type(row[3]);
+			typechecker.std_api.insert((self_type, method), (params, result));
+		}
+		typechecker
 	}
 
 	fn typecheck(mut self, ast: &Block<()>) -> hir::Program {
@@ -383,12 +401,24 @@ impl Typechecker {
 		hir::Expr { kind, typ: expected_type }
 	}
 
-	fn resolve_method(&mut self, self_type: TypeId, method_name: &str) -> (Vec<TypeId>, TypeId) {
+	fn resolve_method(&mut self, self_type_id: TypeId, method_name: &str) -> (Vec<TypeId>, TypeId) {
+		const DEBUG: bool = true;
 		// We cound have returned &FnSignature if Typechecker was splitted into two
 		// separate structs: ProgramTypechecker and FunctionTypechecker, then
 		// FunctionTypechecker would borrow ProgramTypechecker immutably and this
 		// FnSignature could also be borrowed at the same time.
-		todo!()
+		use UncheckedType::*;
+		let self_type = self.types[self_type_id].clone();
+		if let Some((params, result)) = self.std_api.get(&(self_type, method_name)) {
+			if DEBUG {
+				println!("Found method {:?}.{}({:?}) -> {:?}", self_type, method_name, params, result);
+			}
+			let params =
+				params.iter().map(|typ| if typ == &self_type { self_type_id } else { self.types.add(*typ) }).collect();
+			let result = if result == &self_type { self_type_id } else { self.types.add(*result) };
+			return (params, result);
+		}
+		panic!("Method not found")
 	}
 
 	fn resolve_type(&self, type_id: TypeId) -> Type {
@@ -444,6 +474,29 @@ impl Typechecker {
 			}
 			// TODO: Return TypeError instead of panic
 			_ => panic!("wrong type"),
+		}
+	}
+
+	fn parse_unchecked_type(&mut self, typename: &str) -> UncheckedType {
+		match typename {
+			"" => UncheckedType::Unknown,
+			"_" => UncheckedType::Unknown,
+			"()" => UncheckedType::Unit,
+			"bool" => UncheckedType::Bool,
+			"i32" => UncheckedType::I32,
+			"u32" => UncheckedType::U32,
+			"f32" => UncheckedType::F32,
+			"int" => UncheckedType::Integer,
+			"uint" => UncheckedType::Integer,
+			"float" => UncheckedType::Float,
+			"str" => UncheckedType::Str,
+			array if array.starts_with("[") && array.ends_with("]") => {
+				let typ = self.parse_unchecked_type(&array[1..array.len() - 1]);
+				let type_id = self.types.add(typ);
+				UncheckedType::Array(type_id)
+			}
+			// TODO: Return UncheckedTypeError instead of panic
+			_ => panic!("Unknown type"),
 		}
 	}
 }
