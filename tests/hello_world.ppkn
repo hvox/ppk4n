@@ -1,5 +1,5 @@
-# hello world
+# Hello, world!
 
 fun main() {
-	println "hello world"
+	println "Hello, world!"
 }
