@@ -25,6 +25,7 @@ pub mod hir_compiler;
 pub mod hir_gen;
 
 pub mod lir;
+pub mod lir_interpreter;
 
 use mir::Program;
 
