@@ -1,11 +1,11 @@
-// Yet another intermediate representation again
 #![allow(unused)]
 use std::rc::Rc;
 
-use indexmap::IndexMap;
+use indexmap::{IndexMap, IndexSet};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Program {
+	pub exports: IndexSet<Str>,
 	pub fns: IndexMap<Str, Function>,
 }
 
@@ -50,8 +50,9 @@ pub struct Expr<Type> {
 #[derive(Debug, Clone, PartialEq)]
 pub enum ExprKind<Type> {
 	Value(Literal),
-	GetLocal(Str),
+	DefLocal(Str, Box<Expr<Type>>),
 	SetLocal(Str, Box<Expr<Type>>),
+	GetLocal(Str),
 	Block(Block<Type>),
 	While(Box<Expr<Type>>, Box<Expr<Type>>),
 	If(Box<Expr<Type>>, Box<Expr<Type>>, Option<Box<Expr<Type>>>),
@@ -84,16 +85,31 @@ impl Literal {
 	fn as_number(&self) -> u64 {
 		match self {
 			Literal::Number(value) => *value,
-			Literal::String(_) => unreachable!(),
+			_ => unreachable!(),
 		}
 	}
 
-	fn as_i32(&self) -> i32 {
+	pub fn as_i32(&self) -> i32 {
 		self.as_number() as i32
 	}
 
-	fn as_u32(&self) -> u32 {
+	pub fn as_u32(&self) -> u32 {
 		self.as_number() as u32
+	}
+
+	pub fn as_f32(&self) -> f32 {
+		f32::from_bits(self.as_u32())
+	}
+
+	pub fn as_bool(&self) -> bool {
+		self.as_number() != 0
+	}
+
+	pub fn as_str(&self) -> &str {
+		match self {
+			Literal::String(string) => &string,
+			_ => unreachable!(),
+		}
 	}
 }
 
@@ -125,19 +141,18 @@ impl<T> ExprKind<T> {
 		match self {
 			ExprKind::Unreachable => ExprKind::Unreachable,
 			ExprKind::Block(block) => ExprKind::Block(block.map(f)),
+			ExprKind::DefLocal(name, value) => ExprKind::DefLocal(name, value.map(f).into()),
 			ExprKind::SetLocal(name, value) => ExprKind::SetLocal(name, value.map(f).into()),
 			ExprKind::GetLocal(name) => ExprKind::GetLocal(name),
 			ExprKind::FnCall(name, args) => ExprKind::FnCall(name, args.into_iter().map(|arg| arg.map(f)).collect()),
-			ExprKind::MethodCall(object, method, args) => ExprKind::MethodCall(
-				object.map(f).into(), method.into(), args.into_iter().map(|arg| arg.map(f)).collect(),
-			),
+			ExprKind::MethodCall(object, method, args) => {
+				ExprKind::MethodCall(object.map(f).into(), method.into(), args.into_iter().map(|arg| arg.map(f)).collect())
+			}
 			ExprKind::Return(result) => ExprKind::Return(result.map(f).into()),
 			ExprKind::While(condition, body) => ExprKind::While(condition.map(f).into(), body.map(f).into()),
-			ExprKind::If(condition, then, otherwise) => ExprKind::If(
-				condition.map(f).into(),
-				then.map(f).into(),
-				otherwise.map(|some| some.map(f).into()).into(),
-			),
+			ExprKind::If(condition, then, otherwise) => {
+				ExprKind::If(condition.map(f).into(), then.map(f).into(), otherwise.map(|some| some.map(f).into()).into())
+			}
 			ExprKind::Value(literal) => ExprKind::Value(literal),
 		}
 	}

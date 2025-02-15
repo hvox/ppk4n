@@ -21,6 +21,7 @@ pub mod yaira;
 pub mod yaira_typechecker;
 
 pub mod hir;
+pub mod hir_compiler;
 pub mod hir_gen;
 
 pub mod lir;
@@ -36,8 +37,17 @@ pub struct PpknError<'a> {
 pub fn parse(source: &str) -> Result<Program, PpknError> {
 	let tokens = tokenizer::tokenize(source);
 	let ast = parser::parse(tokens)?;
+
+	use std::io::IsTerminal;
 	#[cfg(debug_assertions)]
-	println!("{:#?}", hir_gen::typecheck(&ast));
+	if std::io::stdout().is_terminal() {
+		let hir = hir_gen::typecheck(&ast).unwrap();
+		println!("\x1b[91m[HIR] {:?}\x1b[0m", hir);
+		let lir = hir_compiler::lower_hir_to_lir(&hir);
+		println!("\x1b[93m[LIR] {:?}\x1b[0m", lir);
+		print!("\x1b[92m[OUTPUT]: ");
+		print!("\x1b[0m");
+	}
 	let program = mir_generator::typecheck(ast)?;
 	Ok(program)
 }

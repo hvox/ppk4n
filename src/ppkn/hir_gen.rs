@@ -7,6 +7,7 @@ use std::rc::Rc;
 use std::result;
 
 use indexmap::IndexMap;
+use indexmap::IndexSet;
 
 use super::ast::*;
 use super::hir::{self, FnSignature, Function, Str, Type};
@@ -136,7 +137,7 @@ impl Typechecker {
 			self.fns[fn_idx].body = function_body.map(&mut |type_id| self.resolve_type(type_id));
 		}
 
-		hir::Program { fns: self.fns }
+		hir::Program { fns: self.fns, exports: IndexSet::from(["main".into()]) }
 	}
 
 	fn typecheck_block(&mut self, block: &Block<()>, expected_type: TypeId) -> hir::Block<TypeId> {
