@@ -3,7 +3,7 @@ import sys
 from pathlib import Path
 from collections import namedtuple
 
-Instr = namedtuple("Instr", "name wat stack code")
+Instr = namedtuple("Instr", "name args wat stack code")
 TSV = Path(__file__).resolve().parent / "lir.tsv"
 INSTRS = [Instr(*line.split("\t")) for line in TSV.read_text().splitlines()[1:]]
 
@@ -20,11 +20,27 @@ def frm(expr: str, typ: str) -> str:
     return f"({expr}).to_bits() as u64" if typ[0] == "f" else f"({expr}) as u64"
 
 
+def instrs():
+    next_code = 0
+    codes = {}
+    for instr in INSTRS:
+        instr_body = (instr.args, instr.wat, instr.code)
+        if instr_body in codes and "checked" not in instr.code and "call" not in instr.name:
+            yield (codes[instr_body], instr, False)
+        else:
+            codes[instr_body] = next_code
+            yield (next_code, instr, True)
+            next_code += 1
+
+
 if sys.argv[1:] == ["definition"]:
-    for i, instr in enumerate(INSTRS, 1):
+    for i, instr, _ in instrs():
         print("pub const", instr.name.replace(".", "_").upper() + f":Instr= 0x{i:02X};")
+    print(f"pub const MAX_CODE:u8 = {hex(max(i for i,_,_ in instrs()))};")
+elif sys.argv[1:] == ["names"]:
+    print("[", ", ".join('"' + instr.name + '"' for _, instr, ok in instrs() if ok), "];")
 elif sys.argv[1:] == ["run"]:
-    for instr in filter((lambda instr: instr.code != "manual!"), INSTRS):
+    for _, instr, _ in filter((lambda instr: instr[2] and instr[1].code != "manual!"), instrs()):
         code = instr.code.replace("checked", "wrapping")
         xs, ys = [x.split(", ") if x else [] for x in instr.stack[1:-1].split("] -> [")]
         line = [f"let {x}={into('stack.pop().unwrap()',t)};" for x, t in zip("xyz", xs)]

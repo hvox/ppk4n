@@ -1,97 +1,91 @@
-Instruction	Wat	Stack	Action
-unreachable	unreachable	[] -> []	manual!
-pass	nop	[] -> []	manual!
-block	block	[] -> []	manual!
-loop	loop	[] -> []	manual!
-if_then	if	[bool] -> []	manual!
-else	else	[] -> []	manual!
-end	end	[] -> []	manual!
-jump	br	[] -> []	manual!
-jump_if	br_if	[bool] -> []	manual!
-jump_into	br_table	[bool] -> []	manual!
-return	return	[*] -> []	manual!
-call_func	call	[*] -> []	manual!
-call_import	call	[*] -> []	manual!
-call_indirect	call_indirect	[*] -> []	manual!
-drop	drop	[t] -> []	manual!
-select	select	[bool, t, t] -> [t]	manual!
-global.get	global.get	[] -> [t]	manual!
-global.set	global.set	[t] -> []	manual!
-memory.size	memory.size	[] -> [u32]	manual!
-memory.grow	memory.grow	[u32] -> [u32]	manual!
-f32.const	f32.const	[] -> [f32]	manual!
-f32.get	local.get	[] -> [f32]	manual!
-f32.set	local.set	[f32] -> []	manual!
-f32.tee	local.tee	[f32] -> [f32]	manual!
-f32.load	f32.load	[u32] -> [f32]	manual!
-f32.store	f32.store	[u32, f32] -> []	manual!
-f32.abs	f32.abs	[f32] -> [f32]	x.abs()
-f32.ceil	f32.ceil	[f32] -> [f32]	x.ceil()
-f32.floor	f32.floor	[f32] -> [f32]	x.floor()
-f32.nearest	f32.nearest	[f32] -> [f32]	x.round()
-f32.neg	f32.neg	[f32] -> [f32]	-x
-f32.sqrt	f32.sqrt	[f32] -> [f32]	x.sqrt()
-f32.trunc	f32.trunc	[f32] -> [f32]	x.trunc()
-f32.copysign	f32.copysign	[f32, f32] -> [f32]	x.copysign(y)
-f32.add	f32.add	[f32, f32] -> [f32]	x + y
-f32.div	f32.div	[f32, f32] -> [f32]	x / y
-f32.max	f32.max	[f32, f32] -> [f32]	x.max(y)
-f32.min	f32.min	[f32, f32] -> [f32]	x.min(y)
-f32.mul	f32.mul	[f32, f32] -> [f32]	x * y
-f32.sub	f32.sub	[f32, f32] -> [f32]	x - y
-f32.eq	f32.eq	[f32, f32] -> [bool]	x == y
-f32.ge	f32.ge	[f32, f32] -> [bool]	x >= y
-f32.gt	f32.gt	[f32, f32] -> [bool]	x > y
-f32.le	f32.le	[f32, f32] -> [bool]	x <= y
-f32.lt	f32.lt	[f32, f32] -> [bool]	x < y
-f32.ne	f32.ne	[f32, f32] -> [bool]	x != y
-i32.const	i32.const	[] -> [i32]	manual!
-i32.get	local.get	[] -> [i32]	manual!
-i32.set	local.set	[i32] -> []	manual!
-i32.tee	local.tee	[i32] -> [i32]	manual!
-i32.load	i32.load	[u32] -> [i32]	manual!
-i32.store	i32.store	[u32, i32] -> []	manual!
-i32.and	i32.and	[i32, i32] -> [i32]	x & y
-i32.or	i32.or	[i32, i32] -> [i32]	x | y
-i32.xor	i32.xor	[i32, i32] -> [i32]	x ^ y
-i32.add	i32.add	[i32, i32] -> [i32]	x.checked_add(y)
-i32.div	i32.div_s	[i32, i32] -> [i32]	x.checked_div(y)
-i32.mul	i32.mul	[i32, i32] -> [i32]	x.checked_mul(y)
-i32.rem	i32.rem_s	[i32, i32] -> [i32]	x.checked_rem(y)
-i32.rotl	i32.rotl	[i32, u32] -> [i32]	x.rotate_left(y)
-i32.rotr	i32.rotr	[i32, u32] -> [i32]	x.rotate_right(y)
-i32.shl	i32.shl	[i32, u32] -> [i32]	x.checked_shl(y)
-i32.shr	i32.shr_s	[i32, u32] -> [i32]	x.checked_shr(y)
-i32.sub	i32.sub	[i32, i32] -> [i32]	x.checked_sub(y)
-i32.eqz	i32.eqz	[i32] -> [bool]	x == 0
-i32.eq	i32.eq	[i32, i32] -> [bool]	x != y
-i32.ge	i32.ge_s	[i32, i32] -> [bool]	x >= y
-i32.gt	i32.gt_s	[i32, i32] -> [bool]	x > y
-i32.le	i32.le_s	[i32, i32] -> [bool]	x <= y
-i32.lt	i32.lt_s	[i32, i32] -> [bool]	x < y
-i32.ne	i32.ne	[i32, i32] -> [bool]	x != y
-u32.const	i32.const	[] -> [u32]	manual!
-u32.get	local.get	[] -> [u32]	manual!
-u32.set	local.set	[u32] -> []	manual!
-u32.tee	local.tee	[u32] -> [u32]	manual!
-u32.load	i32.load	[u32] -> [u32]	manual!
-u32.store	i32.store	[u32, u32] -> []	manual!
-u32.and	i32.and	[u32, u32] -> [u32]	x & y
-u32.or	i32.or	[u32, u32] -> [u32]	x | y
-u32.xor	i32.xor	[u32, u32] -> [u32]	x ^ y
-u32.add	i32.add	[u32, u32] -> [u32]	x.checked_add(y)
-u32.div	i32.div_u	[u32, u32] -> [u32]	x.checked_div(y)
-u32.mul	i32.mul	[u32, u32] -> [u32]	x.checked_mul(y)
-u32.rem	i32.rem_u	[u32, u32] -> [u32]	x.checked_rem(y)
-u32.rotl	i32.rotl	[u32, u32] -> [u32]	x.rotate_left(y)
-u32.rotr	i32.rotr	[u32, u32] -> [u32]	x.rotate_right(y)
-u32.shl	i32.shl	[u32, u32] -> [u32]	x.checked_shl(y)
-u32.shr	i32.shr_u	[u32, u32] -> [u32]	x.checked_shr(y)
-u32.sub	i32.sub	[u32, u32] -> [u32]	x.checked_sub(y)
-u32.eqz	i32.eqz	[i32] -> [bool]	x == 0
-u32.eq	i32.eq	[u32, u32] -> [bool]	x != y
-u32.ge	i32.ge_u	[u32, u32] -> [bool]	x >= y
-u32.gt	i32.gt_u	[u32, u32] -> [bool]	x > y
-u32.le	i32.le_u	[u32, u32] -> [bool]	x <= y
-u32.lt	i32.lt_u	[u32, u32] -> [bool]	x < y
-u32.ne	i32.ne	[u32, u32] -> [bool]	x != y
+Instruction	Args	Wat	Stack	Action
+unreachable		unreachable	[] -> []	manual!
+pass		nop	[] -> []	manual!
+block	type:Type size:u32	block	[] -> []	manual!
+loop	type:Type size:u32	loop	[] -> []	manual!
+if_then	type:Type size:u32	if	[bool] -> []	manual!
+else	size:u32	else	[] -> []	manual!
+end		end	[] -> []	manual!
+jump	label:u32	br	[] -> []	manual!
+jump_if	label:u32	br_if	[bool] -> []	manual!
+jump_into	labels:[u32]	br_table	[bool] -> []	manual!
+return		return	[*] -> []	manual!
+call_func	f:u32	call	[*] -> []	manual!
+call_import	f:u32	call	[*] -> []	manual!
+call_indirect	f:u32	call_indirect	[*] -> []	manual!
+drop		drop	[t] -> []	manual!
+select	type:Type	select	[bool, t, t] -> [t]	manual!
+global.get	idx:u32	global.get	[] -> [t]	manual!
+global.set	idx:u32	global.set	[t] -> []	manual!
+local.get	idx:u32	local.get	[] -> [t]	manual!
+local.set	idx:u32	local.set	[t] -> []	manual!
+local.tee	idx:u32	local.tee	[t] -> [t]	manual!
+memory.size		memory.size	[] -> [u32]	manual!
+memory.grow		memory.grow	[u32] -> [u32]	manual!
+f32.const	value:f32	f32.const	[] -> [f32]	manual!
+f32.load	offset:u32	f32.load	[u32] -> [f32]	manual!
+f32.store	offset:u32	f32.store	[u32, f32] -> []	manual!
+f32.abs		f32.abs	[f32] -> [f32]	x.abs()
+f32.ceil		f32.ceil	[f32] -> [f32]	x.ceil()
+f32.floor		f32.floor	[f32] -> [f32]	x.floor()
+f32.nearest		f32.nearest	[f32] -> [f32]	x.round()
+f32.neg		f32.neg	[f32] -> [f32]	-x
+f32.sqrt		f32.sqrt	[f32] -> [f32]	x.sqrt()
+f32.trunc		f32.trunc	[f32] -> [f32]	x.trunc()
+f32.copysign		f32.copysign	[f32, f32] -> [f32]	x.copysign(y)
+f32.add		f32.add	[f32, f32] -> [f32]	x + y
+f32.div		f32.div	[f32, f32] -> [f32]	x / y
+f32.max		f32.max	[f32, f32] -> [f32]	x.max(y)
+f32.min		f32.min	[f32, f32] -> [f32]	x.min(y)
+f32.mul		f32.mul	[f32, f32] -> [f32]	x * y
+f32.sub		f32.sub	[f32, f32] -> [f32]	x - y
+f32.eq		f32.eq	[f32, f32] -> [bool]	x == y
+f32.ge		f32.ge	[f32, f32] -> [bool]	x >= y
+f32.gt		f32.gt	[f32, f32] -> [bool]	x > y
+f32.le		f32.le	[f32, f32] -> [bool]	x <= y
+f32.lt		f32.lt	[f32, f32] -> [bool]	x < y
+f32.ne		f32.ne	[f32, f32] -> [bool]	x != y
+i32.const	value:i32	i32.const	[] -> [i32]	manual!
+i32.load	offset:u32	i32.load	[u32] -> [i32]	manual!
+i32.store	offset:u32	i32.store	[u32, i32] -> []	manual!
+i32.and		i32.and	[i32, i32] -> [i32]	x & y
+i32.or		i32.or	[i32, i32] -> [i32]	x | y
+i32.xor		i32.xor	[i32, i32] -> [i32]	x ^ y
+i32.add		i32.add	[i32, i32] -> [i32]	x.checked_add(y)
+i32.div		i32.div_s	[i32, i32] -> [i32]	x.checked_div(y)
+i32.mul		i32.mul	[i32, i32] -> [i32]	x.checked_mul(y)
+i32.rem		i32.rem_s	[i32, i32] -> [i32]	x.checked_rem(y)
+i32.rotl		i32.rotl	[i32, u32] -> [i32]	x.rotate_left(y)
+i32.rotr		i32.rotr	[i32, u32] -> [i32]	x.rotate_right(y)
+i32.shl		i32.shl	[i32, u32] -> [i32]	x.checked_shl(y)
+i32.shr		i32.shr_s	[i32, u32] -> [i32]	x.checked_shr(y)
+i32.sub		i32.sub	[i32, i32] -> [i32]	x.checked_sub(y)
+i32.eqz		i32.eqz	[i32] -> [bool]	x == 0
+i32.eq		i32.eq	[i32, i32] -> [bool]	x != y
+i32.ge		i32.ge_s	[i32, i32] -> [bool]	x >= y
+i32.gt		i32.gt_s	[i32, i32] -> [bool]	x > y
+i32.le		i32.le_s	[i32, i32] -> [bool]	x <= y
+i32.lt		i32.lt_s	[i32, i32] -> [bool]	x < y
+i32.ne		i32.ne	[i32, i32] -> [bool]	x != y
+u32.const	value:u32	i32.const	[] -> [u32]	manual!
+u32.load	offset:u32	i32.load	[u32] -> [u32]	manual!
+u32.store	offset:u32	i32.store	[u32, u32] -> []	manual!
+u32.and		i32.and	[u32, u32] -> [u32]	x & y
+u32.or		i32.or	[u32, u32] -> [u32]	x | y
+u32.xor		i32.xor	[u32, u32] -> [u32]	x ^ y
+u32.add		i32.add	[u32, u32] -> [u32]	x.checked_add(y)
+u32.div		i32.div_u	[u32, u32] -> [u32]	x.checked_div(y)
+u32.mul		i32.mul	[u32, u32] -> [u32]	x.checked_mul(y)
+u32.rem		i32.rem_u	[u32, u32] -> [u32]	x.checked_rem(y)
+u32.rotl		i32.rotl	[u32, u32] -> [u32]	x.rotate_left(y)
+u32.rotr		i32.rotr	[u32, u32] -> [u32]	x.rotate_right(y)
+u32.shl		i32.shl	[u32, u32] -> [u32]	x.checked_shl(y)
+u32.shr		i32.shr_u	[u32, u32] -> [u32]	x.checked_shr(y)
+u32.sub		i32.sub	[u32, u32] -> [u32]	x.checked_sub(y)
+u32.eqz		i32.eqz	[i32] -> [bool]	x == 0
+u32.eq		i32.eq	[u32, u32] -> [bool]	x != y
+u32.ge		i32.ge_u	[u32, u32] -> [bool]	x >= y
+u32.gt		i32.gt_u	[u32, u32] -> [bool]	x > y
+u32.le		i32.le_u	[u32, u32] -> [bool]	x <= y
+u32.lt		i32.lt_u	[u32, u32] -> [bool]	x < y
+u32.ne		i32.ne	[u32, u32] -> [bool]	x != y
