@@ -32,17 +32,12 @@ impl<'a> Typechecker<'a> {
 	fn typecheck(mut self) -> Result<Program<'a>, TypeError<'a>> {
 		for stmt in &self.ast.stmts {
 			match &stmt.kind {
-				ExprKind::Function(name, parameters, _) => {
+				ExprKind::Function(name, parameters, _, _) => {
 					let mut params = IndexMap::new();
 					for (name, typ) in parameters.iter() {
 						params.insert(name.to_string(), self.get_type_from_name(typ)?);
 					}
-					let f = Function {
-						params,
-						result: Type::Void,
-						locals: IndexMap::new(),
-						code: vec![],
-					};
+					let f = Function { params, result: Type::Void, locals: IndexMap::new(), code: vec![] };
 					self.functions.insert(name.to_string(), f);
 				}
 				_ => unreachable!(),
@@ -50,7 +45,7 @@ impl<'a> Typechecker<'a> {
 		}
 		for stmt in &self.ast.stmts {
 			match &stmt.kind {
-				ExprKind::Function(name, _, body) => {
+				ExprKind::Function(name, _, _, body) => {
 					let func_id = self.functions.get_index_of(*name).unwrap();
 					let mut locals = self.functions[func_id].params.clone();
 					let mut instrs = vec![];
@@ -76,53 +71,31 @@ impl<'a> Typechecker<'a> {
 		}
 	}
 
-	fn typecheck_stmt(
-		&self,
-		scope: &mut IndexMap<String, Type>,
-		stmt: &Expr<'a>,
-	) -> Result<Vec<Instr<'a>>, TypeError<'a>> {
+	fn typecheck_stmt(&self, scope: &mut IndexMap<String, Type>, stmt: &Expr<'a>) -> Result<Vec<Instr<'a>>, TypeError<'a>> {
 		let mut instrs = vec![];
 		match &stmt.kind {
 			ExprKind::Definition(name, typ, expr) => {
 				let var_id = scope.len();
 				scope.insert(name.to_string(), self.get_type_from_name(typ)?);
 				let op = self.typecheck_expr(scope, expr)?;
-				instrs.push(Instr {
-					source: stmt.source,
-					kind: InstrKind::Definition(var_id, Box::new(op)),
-				});
+				instrs.push(Instr { source: stmt.source, kind: InstrKind::Definition(var_id, Box::new(op)) });
 			}
 			ExprKind::Print(expr) => {
-				instrs.push(Instr {
-					source: stmt.source,
-					kind: InstrKind::Print(Box::new(self.typecheck_expr(scope, expr)?)),
-				});
+				instrs.push(Instr { source: stmt.source, kind: InstrKind::Print(Box::new(self.typecheck_expr(scope, expr)?)) });
 			}
 			ExprKind::Println(expr) => {
+				instrs.push(Instr { source: stmt.source, kind: InstrKind::Print(Box::new(self.typecheck_expr(scope, expr)?)) });
 				instrs.push(Instr {
 					source: stmt.source,
-					kind: InstrKind::Print(Box::new(self.typecheck_expr(scope, expr)?)),
-				});
-				instrs.push(Instr {
-					source: stmt.source,
-					kind: InstrKind::Print(Box::new(Instr {
-						source: stmt.source,
-						kind: InstrKind::String("\n".to_string()),
-					})),
+					kind: InstrKind::Print(Box::new(Instr { source: stmt.source, kind: InstrKind::String("\n".to_string()) })),
 				});
 			}
 			ExprKind::Assignment(name, expr) => {
 				let Some(var_id) = scope.get_index_of(*name) else {
-					return Err(TypeError {
-						location: name,
-						message: "Variable is not defined in this scope",
-					});
+					return Err(TypeError { location: name, message: "Variable is not defined in this scope" });
 				};
 				let op = self.typecheck_expr(scope, expr)?;
-				instrs.push(Instr {
-					source: stmt.source,
-					kind: InstrKind::Assignment(var_id, Box::new(op)),
-				});
+				instrs.push(Instr { source: stmt.source, kind: InstrKind::Assignment(var_id, Box::new(op)) });
 			}
 			ExprKind::If(expr, block, block1) => todo!(),
 			ExprKind::While(expr, block) => {
@@ -132,17 +105,13 @@ impl<'a> Typechecker<'a> {
 				}
 				instrs.push(Instr {
 					source: stmt.source,
-					kind: InstrKind::While(
-						Box::new(self.typecheck_expr(scope, expr)?),
-						block_instrs,
-					),
+					kind: InstrKind::While(Box::new(self.typecheck_expr(scope, expr)?), block_instrs),
 				})
 			}
-			ExprKind::Return(expr) => instrs.push(Instr {
-				source: stmt.source,
-				kind: InstrKind::Return(Box::new(self.typecheck_expr(scope, expr)?)),
-			}),
-			ExprKind::Function(_, vec, block) => todo!(),
+			ExprKind::Return(expr) => {
+				instrs.push(Instr { source: stmt.source, kind: InstrKind::Return(Box::new(self.typecheck_expr(scope, expr)?)) })
+			}
+			ExprKind::Function(..) => todo!(),
 			ExprKind::Class(_, vec) => todo!(),
 			ExprKind::Import(_) => todo!(),
 			_ => {
@@ -152,11 +121,7 @@ impl<'a> Typechecker<'a> {
 		Ok(instrs)
 	}
 
-	fn typecheck_expr(
-		&self,
-		scope: &IndexMap<String, Type>,
-		expr: &Expr<'a>,
-	) -> Result<Instr<'a>, TypeError<'a>> {
+	fn typecheck_expr(&self, scope: &IndexMap<String, Type>, expr: &Expr<'a>) -> Result<Instr<'a>, TypeError<'a>> {
 		let instr = match &expr.kind {
 			ExprKind::Integer(number) => InstrKind::Integer(*number as i64),
 			ExprKind::Float(number) => InstrKind::Float(*number),
@@ -165,28 +130,23 @@ impl<'a> Typechecker<'a> {
 			ExprKind::Grouping(expr) => todo!(),
 			ExprKind::Unary(unary_op, expr) => todo!(),
 			ExprKind::Binary(lhs, bin_op, rhs) => match bin_op.kind {
-				BinOpKind::Minus => InstrKind::SubI64(
-					Box::new(self.typecheck_expr(scope, lhs)?),
-					Box::new(self.typecheck_expr(scope, rhs)?),
-				),
-				BinOpKind::Plus => InstrKind::AddI64(
-					Box::new(self.typecheck_expr(scope, lhs)?),
-					Box::new(self.typecheck_expr(scope, rhs)?),
-				),
-				BinOpKind::Slash => InstrKind::DivI64(
-					Box::new(self.typecheck_expr(scope, lhs)?),
-					Box::new(self.typecheck_expr(scope, rhs)?),
-				),
-				BinOpKind::Star => InstrKind::MulI64(
-					Box::new(self.typecheck_expr(scope, lhs)?),
-					Box::new(self.typecheck_expr(scope, rhs)?),
-				),
+				BinOpKind::Minus => {
+					InstrKind::SubI64(Box::new(self.typecheck_expr(scope, lhs)?), Box::new(self.typecheck_expr(scope, rhs)?))
+				}
+				BinOpKind::Plus => {
+					InstrKind::AddI64(Box::new(self.typecheck_expr(scope, lhs)?), Box::new(self.typecheck_expr(scope, rhs)?))
+				}
+				BinOpKind::Slash => {
+					InstrKind::DivI64(Box::new(self.typecheck_expr(scope, lhs)?), Box::new(self.typecheck_expr(scope, rhs)?))
+				}
+				BinOpKind::Star => {
+					InstrKind::MulI64(Box::new(self.typecheck_expr(scope, lhs)?), Box::new(self.typecheck_expr(scope, rhs)?))
+				}
 				BinOpKind::Greater => todo!(),
 				BinOpKind::GreaterEqual => todo!(),
-				BinOpKind::Less => InstrKind::LessI64(
-					Box::new(self.typecheck_expr(scope, lhs)?),
-					Box::new(self.typecheck_expr(scope, rhs)?),
-				),
+				BinOpKind::Less => {
+					InstrKind::LessI64(Box::new(self.typecheck_expr(scope, lhs)?), Box::new(self.typecheck_expr(scope, rhs)?))
+				}
 				BinOpKind::LessEqual => todo!(),
 				BinOpKind::BangEqual => todo!(),
 				BinOpKind::EqualEqual => todo!(),

@@ -26,7 +26,7 @@ pub enum ExprKind<'a, T> {
 	While(Box<Expr<'a, T>>, Block<'a, T>),
 	Return(Box<Expr<'a, T>>),
 	Indented(Block<'a, T>),
-	Function(Identifier<'a>, Vec<(Identifier<'a>, Typename<'a>)>, Block<'a, T>),
+	Function(Identifier<'a>, Vec<(Identifier<'a>, Typename<'a>)>, Typename<'a>, Block<'a, T>),
 	Class(Identifier<'a>, Vec<(Identifier<'a>, Typename<'a>)>),
 	Import(Identifier<'a>),
 
@@ -34,6 +34,7 @@ pub enum ExprKind<'a, T> {
 	Float(f64),
 	String(Box<str>),
 	Variable(Box<str>), // TODO why do I need Box<str>?
+	Array(Vec<Expr<'a, T>>),
 
 	Grouping(Box<Expr<'a, T>>),
 	Unary(UnaryOp<'a>, Box<Expr<'a, T>>),
@@ -138,10 +139,7 @@ impl<'a, T> ExprKind<'a, T> {
 			Assignment(var, expr) => Assignment(var, Box::new(expr.map_annotations(f))),
 			If(expr, then, otherwise) => If(
 				Box::new(expr.map_annotations(f)),
-				Block {
-					source: then.source,
-					stmts: then.stmts.into_iter().map(|stmt| stmt.map_annotations(f)).collect(),
-				},
+				Block { source: then.source, stmts: then.stmts.into_iter().map(|stmt| stmt.map_annotations(f)).collect() },
 				otherwise.map(|block| Block {
 					source: block.source,
 					stmts: block.stmts.into_iter().map(|stmt| stmt.map_annotations(f)).collect(),
@@ -149,23 +147,16 @@ impl<'a, T> ExprKind<'a, T> {
 			),
 			While(expr, block) => While(
 				Box::new(expr.map_annotations(f)),
-				Block {
-					source: block.source,
-					stmts: block.stmts.into_iter().map(|stmt| stmt.map_annotations(f)).collect(),
-				},
+				Block { source: block.source, stmts: block.stmts.into_iter().map(|stmt| stmt.map_annotations(f)).collect() },
 			),
 			Return(expr) => Return(Box::new(expr.map_annotations(f))),
 			Grouping(expr) => Grouping(Box::new(expr.map_annotations(f))),
 			Unary(op, expr) => Unary(op, Box::new(expr.map_annotations(f))),
 			Binary(lhs, op, rhs) => Binary(Box::new(lhs.map_annotations(f)), op, Box::new(rhs.map_annotations(f))),
-			FunctionCall(name, args) => {
-				FunctionCall(name, args.into_iter().map(|stmt| stmt.map_annotations(f)).collect())
+			FunctionCall(name, args) => FunctionCall(name, args.into_iter().map(|stmt| stmt.map_annotations(f)).collect()),
+			MethodCall(obj, func, args) => {
+				MethodCall(obj.map_annotations(f).into(), func, args.into_iter().map(|stmt| stmt.map_annotations(f)).collect())
 			}
-			MethodCall(obj, func, args) => MethodCall(
-				obj.map_annotations(f).into(),
-				func,
-				args.into_iter().map(|stmt| stmt.map_annotations(f)).collect(),
-			),
 			Variable(x) => Variable(x),
 			Integer(x) => Integer(x),
 			String(x) => String(x),
@@ -188,10 +179,9 @@ impl<'a, T> ExprKind<'a, T> {
 				Box::new(expr.try_map_annotations(f)?),
 				Block { source: then.source, stmts: try_map(then.stmts, |stmt| stmt.try_map_annotations(f))? },
 				match otherwise {
-					Some(block) => Some(Block {
-						source: block.source,
-						stmts: try_map(block.stmts, |stmt| stmt.try_map_annotations(f))?,
-					}),
+					Some(block) => {
+						Some(Block { source: block.source, stmts: try_map(block.stmts, |stmt| stmt.try_map_annotations(f))? })
+					}
 					None => None,
 				},
 			),
@@ -202,9 +192,7 @@ impl<'a, T> ExprKind<'a, T> {
 			Return(expr) => Return(Box::new(expr.try_map_annotations(f)?)),
 			Grouping(expr) => Grouping(Box::new(expr.try_map_annotations(f)?)),
 			Unary(op, expr) => Unary(op, Box::new(expr.try_map_annotations(f)?)),
-			Binary(lhs, op, rhs) => {
-				Binary(Box::new(lhs.try_map_annotations(f)?), op, Box::new(rhs.try_map_annotations(f)?))
-			}
+			Binary(lhs, op, rhs) => Binary(Box::new(lhs.try_map_annotations(f)?), op, Box::new(rhs.try_map_annotations(f)?)),
 			FunctionCall(name, args) => FunctionCall(name, try_map(args, |arg| arg.try_map_annotations(f))?),
 			MethodCall(obj, func, args) => {
 				MethodCall(obj.try_map_annotations(f)?.into(), func, try_map(args, |arg| arg.try_map_annotations(f))?)
@@ -259,7 +247,7 @@ where
 			ExprKind::If(expr, block, block1) => todo!(),
 			ExprKind::While(expr, block) => todo!(),
 			ExprKind::Return(expr) => todo!(),
-			ExprKind::Function(name, vec, block) => {
+			ExprKind::Function(name, vec, _, block) => {
 				format!("fun name() {} {}{}", "{", block.to_string(), "}")
 			}
 			ExprKind::Class(_, vec) => todo!(),
@@ -268,6 +256,7 @@ where
 			ExprKind::Integer(_) => String::from("number"),
 			ExprKind::String(_) => String::from("string"),
 			ExprKind::Variable(_) => String::from("variable"),
+			ExprKind::Array(_) => String::from("[...]"),
 			ExprKind::Grouping(expr) => todo!(),
 			ExprKind::Unary(unary_op, expr) => todo!(),
 			ExprKind::Binary(lhs, bin_op, rhs) => {

@@ -77,8 +77,7 @@ impl<'a> Typechecker<'a> {
 		let mut sources = vec![];
 
 		for stmt in ast.stmts.into_iter() {
-			let ExprKind::Function(name, params, body) = stmt.kind else {
-				// TODO Use different type of error?
+			let ExprKind::Function(name, params, _, body) = stmt.kind else {
 				return Err(TypeError { location: stmt.source, message: "Expected function definition" });
 			};
 			let name = Str::from(name);
@@ -369,10 +368,7 @@ impl<'a, 'b> FunctionTypechecker<'a, 'b> {
 						None => {
 							return Err(TypeError {
 								location: source,
-								message: Box::leak(Box::from(format!(
-									"Variable {} is not found in current scope",
-									name
-								))),
+								message: Box::leak(Box::from(format!("Variable {} is not found in current scope", name))),
 							});
 						}
 					},
@@ -381,10 +377,9 @@ impl<'a, 'b> FunctionTypechecker<'a, 'b> {
 					ExprKind::Binary(lhs, op, rhs) => {
 						let lhs_type = lhs.annotations;
 						let rhs_type = rhs.annotations;
-						self.types.merge(lhs_type, rhs_type).map_err(|(t1, t2)| TypeError {
-							location: op.source,
-							message: "Operands have incompatible types",
-						})?;
+						self.types
+							.merge(lhs_type, rhs_type)
+							.map_err(|(t1, t2)| TypeError { location: op.source, message: "Operands have incompatible types" })?;
 						self.types.merge(t, lhs_type).unwrap();
 					}
 					ExprKind::FunctionCall(name, args) => {
@@ -396,10 +391,7 @@ impl<'a, 'b> FunctionTypechecker<'a, 'b> {
 						let Some(variable_idx) = self.scope.get(obj.source) else {
 							return Err(TypeError {
 								location: source,
-								message: Box::leak(Box::from(format!(
-									"Variable {} is not found in current scope",
-									obj.source
-								))),
+								message: Box::leak(Box::from(format!("Variable {} is not found in current scope", obj.source))),
 							});
 						};
 						let cls = self.types[self.locals[*variable_idx].1].clone();

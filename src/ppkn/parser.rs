@@ -4,6 +4,8 @@ use std::slice;
 use super::ast::{self, BinOp, BinOpKind, Identifier, Typename};
 use super::token::{Token, TokenKind};
 
+const DEBUG_LOGGING: bool = false;
+
 type Block<'a> = ast::Block<'a, ()>;
 type Expr<'a> = ast::Expr<'a, ()>;
 type ExprKind<'a> = ast::ExprKind<'a, ()>;
@@ -45,6 +47,9 @@ impl<'a> Parser<'a> {
 	}
 
 	fn block(&mut self) -> Result<Block<'a>, SyntaxError<'a>> {
+		if DEBUG_LOGGING {
+			eprintln!("Parsing block at {:?}", &self.tokens[self.position..self.tokens.len().min(self.position + 4)]);
+		}
 		let mut source = &self.tokens[self.position].source[..0];
 		let mut stmts = vec![];
 		while let Ok(statement) = self.statement() {
@@ -56,6 +61,9 @@ impl<'a> Parser<'a> {
 	}
 
 	fn statement(&mut self) -> Result<Expr<'a>, SyntaxError<'a>> {
+		if DEBUG_LOGGING {
+			eprintln!("Parsing stmt at {:?}", &self.tokens[self.position..self.tokens.len().min(self.position + 4)]);
+		}
 		use ast::ExprKind::*;
 		let start_position = self.position;
 		let start = self.tokens[self.position].source;
@@ -108,6 +116,9 @@ impl<'a> Parser<'a> {
 	}
 
 	fn definition(&mut self) -> Result<(Identifier<'a>, Typename<'a>, Box<Expr<'a>>), SyntaxError<'a>> {
+		if DEBUG_LOGGING {
+			eprintln!("Parsing definition at {:?}", &self.tokens[self.position..self.tokens.len().min(self.position + 4)]);
+		}
 		// println!("{:?}", &self.tokens[self.position..]);
 		let start_position = self.position;
 		let variable = self.expect_identifier()?;
@@ -115,13 +126,12 @@ impl<'a> Parser<'a> {
 			self.position = start_position;
 			err
 		})?;
-		let typename = self.expect_identifier().map(|token| &token.source[..0]);
+		let typename = self.expect_typename()?;
 		// println!("{:?}", &self.tokens[self.position - 1..self.position + 2]);
 		let equal_sign = self.expect(TokenKind::Equal).map_err(|err| {
 			self.position = start_position;
 			err
 		})?;
-		let typename = typename.unwrap_or(&equal_sign.source[..0]);
 		let value = self.expression().map_err(|err| {
 			self.position = start_position;
 			err
@@ -218,6 +228,21 @@ impl<'a> Parser<'a> {
 			self.position = start_position;
 			err
 		})?;
+		let position = self.position;
+		let result = if let Ok(_) = self.expect(TokenKind::Minus) {
+			self.expect(TokenKind::Greater).map_err(|err| {
+				self.position = start_position;
+				err
+			})?;
+			let result_token = self.expect_identifier().map_err(|err| {
+				self.position = start_position;
+				err
+			})?;
+			result_token.source
+		} else {
+			self.position = position;
+			""
+		};
 		self.expect(TokenKind::LeftBrace).map_err(|err| {
 			self.position = start_position;
 			err
@@ -230,7 +255,7 @@ impl<'a> Parser<'a> {
 			self.position = start_position;
 			err
 		})?;
-		Ok(Expr::new(span(first_token.source, closing_brace.source), ExprKind::Function(name.source, args, body)))
+		Ok(Expr::new(span(first_token.source, closing_brace.source), ExprKind::Function(name.source, args, result, body)))
 	}
 
 	fn function_arguments(&mut self) -> Result<Vec<(Identifier<'a>, Typename<'a>)>, SyntaxError<'a>> {
@@ -262,8 +287,9 @@ impl<'a> Parser<'a> {
 	fn expression(&mut self) -> Result<Expr<'a>, SyntaxError<'a>> {
 		use TokenKind::*;
 		let mut expr = self.arithmetic_expression()?;
-		if let Ok(op) = self.expect_any(&[Less, LessEqual, EqualEqual, GreaterEqual, Greater]) {
+		if let Ok(op) = self.expect_any(&[Less, LessEqual, EqualEqual, GreaterEqual, Greater, BangEqual]) {
 			let binop_kind = match op.kind {
+				BangEqual => BinOpKind::BangEqual,
 				EqualEqual => BinOpKind::EqualEqual,
 				Greater => BinOpKind::Greater,
 				GreaterEqual => BinOpKind::GreaterEqual,
@@ -313,10 +339,7 @@ impl<'a> Parser<'a> {
 				Slash => BinOp { source, kind: BinOpKind::Slash },
 				_ => unreachable!(),
 			};
-			product = Expr::new(
-				span(product.source, factor.source),
-				ExprKind::Binary(Box::new(product), op, Box::new(factor)),
-			)
+			product = Expr::new(span(product.source, factor.source), ExprKind::Binary(Box::new(product), op, Box::new(factor)))
 		}
 		Ok(product)
 	}
@@ -405,10 +428,22 @@ impl<'a> Parser<'a> {
 				self.position = start_position;
 				err
 			})?;
-			return Ok(Expr::new(
-				span(&self.tokens[self.position].source, &end.source),
-				ExprKind::Grouping(content.into()),
-			));
+			return Ok(Expr::new(span(&self.tokens[start_position].source, &end.source), ExprKind::Grouping(content.into())));
+		}
+		if self.expect(TokenKind::LeftBracket).is_ok() {
+			let mut array = vec![];
+			let mut position = self.position;
+			while let Ok(item) = self.expression() {
+				array.push(item);
+				let _ = self.expect(TokenKind::Comma);
+				position = self.position;
+			}
+			self.position = position;
+			let end = self.expect(TokenKind::RightBracket).map_err(|err| {
+				self.position = start_position;
+				err
+			})?;
+			return Ok(Expr::new(span(&self.tokens[start_position].source, &end.source), ExprKind::Array(array)));
 		}
 		use TokenKind::*;
 		let kind = match &self.tokens[self.position].kind {
@@ -421,6 +456,20 @@ impl<'a> Parser<'a> {
 		let source = self.tokens[self.position].source;
 		self.position += 1;
 		return Ok(Expr::new(source, kind));
+	}
+
+	fn expect_typename(&mut self) -> Result<&'a str, SyntaxError<'a>> {
+		if DEBUG_LOGGING {
+			eprintln!("Parsing typename at {:?}", &self.tokens[self.position..self.tokens.len().min(self.position + 4)]);
+		}
+		let start_position = self.position;
+		while self.tokens[self.position].is_identifier()
+			|| self.tokens[self.position].kind == TokenKind::LeftBracket
+			|| self.tokens[self.position].kind == TokenKind::RightBracket
+		{
+			self.position += 1;
+		}
+		Ok(span(self.tokens[start_position].source, self.tokens[self.position - 1].source))
 	}
 
 	fn expect_any(&mut self, expected_tokens: &[TokenKind]) -> Result<Token<'a>, SyntaxError<'a>> {

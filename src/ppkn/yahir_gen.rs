@@ -10,7 +10,9 @@ use indexmap::IndexMap;
 use indexmap::IndexSet;
 
 use super::ast::*;
-use super::hir::{self, FnSignature, Function, Str, Type};
+use super::yahir::{self, FnSignature, Function, Str, Type};
+
+const DEBUG_LOGGING: bool = false;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TypeError {
@@ -19,13 +21,13 @@ pub struct TypeError {
 	pub message: Box<str>,
 }
 
-pub fn typecheck(program: &Block<()>) -> Result<hir::Program, TypeError> {
+pub fn typecheck(program: &Block<()>) -> Result<yahir::Program, TypeError> {
 	Ok(Typechecker::new().typecheck(program))
 }
 
 #[derive(Debug, PartialEq)]
 struct Typechecker {
-	pub fns: IndexMap<Str, hir::Function>,
+	pub fns: IndexMap<Str, yahir::Function>,
 	types: Types,
 	restype: TypeId,
 	// Maybe change it to indexmap?
@@ -82,17 +84,17 @@ impl Typechecker {
 		typechecker
 	}
 
-	fn typecheck(mut self, ast: &Block<()>) -> hir::Program {
-		const TYPECHECKED_FUNCTION_BODY_PLACEHOLDER: hir::Expr<Type> =
-			hir::Expr { kind: hir::ExprKind::Unreachable, typ: Type::Unit };
+	fn typecheck(mut self, ast: &Block<()>) -> yahir::Program {
+		const TYPECHECKED_FUNCTION_BODY_PLACEHOLDER: yahir::Expr<Type> =
+			yahir::Expr { kind: yahir::ExprKind::Unreachable, typ: Type::Unit };
 		let mut bodies = Vec::new();
 		for Expr { source, kind, annotations } in &ast.stmts {
 			match kind {
-				ExprKind::Function(name, parameters, _, body) => {
+				ExprKind::Function(name, parameters, result, body) => {
 					// TODO: Where function result type?
 					let name = Str::from(*name);
 					let mut params = vec![];
-					let mut result = Type::Unit;
+					let mut result = self.parse_type(result);
 					let mut param_names = vec![];
 					for (param, typename) in parameters {
 						param_names.push(Str::from(*param));
@@ -122,14 +124,14 @@ impl Typechecker {
 			}
 			// TODO: Allow AST to have arbitary expressions as function bodies
 			let function_body =
-				hir::Expr { kind: hir::ExprKind::Block(self.typecheck_block(body, self.restype)), typ: self.restype };
+				yahir::Expr { kind: yahir::ExprKind::Block(self.typecheck_block(body, self.restype)), typ: self.restype };
 			self.fns[fn_idx].body = function_body.map(&mut |type_id| self.resolve_type(type_id));
 		}
 
-		hir::Program { fns: self.fns, exports: IndexSet::from(["main".into()]) }
+		yahir::Program { fns: self.fns, exports: IndexSet::from(["main".into()]) }
 	}
 
-	fn typecheck_block(&mut self, block: &Block<()>, expected_type: TypeId) -> hir::Block<TypeId> {
+	fn typecheck_block(&mut self, block: &Block<()>, expected_type: TypeId) -> yahir::Block<TypeId> {
 		self.scope.push(HashMap::new());
 		let final_operands;
 		if block.stmts.is_empty() {
@@ -147,10 +149,10 @@ impl Typechecker {
 			None
 		};
 		self.scope.pop();
-		hir::Block { stmts, result }
+		yahir::Block { stmts, result }
 	}
 
-	fn typecheck_stmt(&mut self, stmt: &Expr<()>) -> hir::Stmt<TypeId> {
+	fn typecheck_stmt(&mut self, stmt: &Expr<()>) -> yahir::Stmt<TypeId> {
 		match &stmt.kind {
 			ExprKind::Definition(variable, typename, value) => {
 				let name = Str::from(*variable);
@@ -162,17 +164,17 @@ impl Typechecker {
 				let value = self.typecheck_expr(value, typ);
 				let scope = self.scope.last_mut().unwrap();
 				scope.insert(name.clone(), typ);
-				hir::Stmt::Def(name, value)
+				yahir::Stmt::Def(name, value)
 			}
-			ExprKind::If(_, _, _) | ExprKind::Indented(_) => hir::Stmt::Expr(self.typecheck_expr(stmt, self.types.unit)),
+			ExprKind::If(_, _, _) | ExprKind::Indented(_) => yahir::Stmt::Expr(self.typecheck_expr(stmt, self.types.unit)),
 			_ => {
 				let expected_type = self.types.add(UncheckedType::Unknown);
-				hir::Stmt::Expr(self.typecheck_expr(stmt, expected_type))
+				yahir::Stmt::Expr(self.typecheck_expr(stmt, expected_type))
 			}
 		}
 	}
 
-	fn typecheck_expr(&mut self, expr: &Expr<()>, expected_type: TypeId) -> hir::Expr<TypeId> {
+	fn typecheck_expr(&mut self, expr: &Expr<()>, expected_type: TypeId) -> yahir::Expr<TypeId> {
 		// Different actions depending on expected_type
 		// IF expected_type == Unit, then add pass to the end of blocks and ifs
 		// otherwise unify with last expression in the block or if
@@ -182,14 +184,14 @@ impl Typechecker {
 				let mut args = vec![];
 				let expected_type = self.types.add(UncheckedType::Unknown);
 				args.push(self.typecheck_expr(expr, expected_type));
-				hir::ExprKind::FnCall(Str::from("print"), args)
+				yahir::ExprKind::FnCall(Str::from("print"), args)
 			}
 			ExprKind::Println(expr) => {
 				self.types.unify(expected_type, self.types.unit).expect("Type Error");
 				let mut args = vec![];
 				let expected_type = self.types.add(UncheckedType::Unknown);
 				args.push(self.typecheck_expr(expr, expected_type));
-				hir::ExprKind::FnCall(Str::from("println"), args)
+				yahir::ExprKind::FnCall(Str::from("println"), args)
 			}
 			ExprKind::Definition(varname, typename, expr) => {
 				panic!("Variable declaration is not allowed here");
@@ -205,13 +207,13 @@ impl Typechecker {
 				// }
 				// let scope = self.scope.last_mut().unwrap();
 				// scope.insert(name.clone(), typ);
-				// hir::ExprKind::DefLocal(name, Box::new(self.typecheck_expr(expr, typ)))
+				// yahir::ExprKind::DefLocal(name, Box::new(self.typecheck_expr(expr, typ)))
 			}
 			ExprKind::Assignment(varname, expr) => {
 				self.types.unify(expected_type, self.types.unit).expect("Type Error");
 				let name = Str::from(*varname);
 				let typ = self.local(&name);
-				hir::ExprKind::SetLocal(name, Box::new(self.typecheck_expr(expr, typ)))
+				yahir::ExprKind::SetLocal(name, Box::new(self.typecheck_expr(expr, typ)))
 			}
 			ExprKind::If(condition, then, otherwise) => {
 				let condition = self.typecheck_expr(condition, self.types.bool);
@@ -227,7 +229,7 @@ impl Typechecker {
 					} else {
 						None
 					};
-					hir::ExprKind::If(Box::new(condition), Box::new(then), otherwise)
+					yahir::ExprKind::If(Box::new(condition), Box::new(then), otherwise)
 				} else {
 					let then = self.typecheck_expr(&then, expected_type);
 					let otherwise = if let Some(otherwise) = otherwise {
@@ -236,22 +238,22 @@ impl Typechecker {
 						self.types.unify(expected_type, self.types.unit);
 						None
 					};
-					hir::ExprKind::If(Box::new(condition), Box::new(then), otherwise)
+					yahir::ExprKind::If(Box::new(condition), Box::new(then), otherwise)
 				}
 			}
 			ExprKind::While(condition, body) => {
 				self.types.unify(expected_type, self.types.unit).expect("Type Error");
 				let condition = self.typecheck_expr(condition, self.types.bool);
 				let body = self.typecheck_expr(&body.clone().into_expr(), self.types.unit);
-				hir::ExprKind::While(Box::new(condition), Box::new(body))
+				yahir::ExprKind::While(Box::new(condition), Box::new(body))
 			}
 			ExprKind::Return(result) => {
 				let result = self.typecheck_expr(result, self.restype);
-				hir::ExprKind::Return(Box::new(result))
+				yahir::ExprKind::Return(Box::new(result))
 			}
 			ExprKind::Indented(block) => {
 				let block = self.typecheck_block(block, expected_type);
-				hir::ExprKind::Block(block)
+				yahir::ExprKind::Block(block)
 			}
 			ExprKind::Function(..) | ExprKind::Class(_, _) | ExprKind::Import(_) => {
 				panic!("Declarations can't be expressions")
@@ -259,93 +261,99 @@ impl Typechecker {
 			ExprKind::Integer(number) => {
 				let integer_type = self.types.add(UncheckedType::Integer);
 				self.types.unify(expected_type, integer_type);
-				hir::ExprKind::Value(hir::Literal::Number(*number))
+				yahir::ExprKind::Value(yahir::Literal::Number(*number))
 			}
 			ExprKind::Float(number) => {
 				let float_type = self.types.add(UncheckedType::Float);
 				self.types.unify(expected_type, float_type);
-				hir::ExprKind::Value(hir::Literal::Number(number.to_bits()))
+				yahir::ExprKind::Value(yahir::Literal::Number(number.to_bits()))
 			}
 			ExprKind::String(string) => {
 				let string = string.clone().into();
 				self.types.unify(expected_type, self.types.str);
-				hir::ExprKind::Value(hir::Literal::String(string))
+				yahir::ExprKind::Value(yahir::Literal::String(string))
 			}
 			ExprKind::Variable(_) => {
 				let name = Str::from(expr.source);
 				let actual_type = self.local(&name);
 				self.types.unify(expected_type, actual_type).expect("Type Error");
-				hir::ExprKind::GetLocal(name)
+				yahir::ExprKind::GetLocal(name)
+			}
+			ExprKind::Array(_) => {
+				todo!()
 			}
 			ExprKind::Grouping(expr) => self.typecheck_expr(expr, expected_type).kind,
 			ExprKind::Unary(op, expr) => match op.kind {
 				UnaryOpKind::Minus => {
 					let expr = self.typecheck_expr(expr, expected_type);
-					hir::ExprKind::MethodCall(expr.into(), "neg".into(), vec![])
+					yahir::ExprKind::MethodCall(expr.into(), "neg".into(), vec![])
 				}
 				UnaryOpKind::Bang => {
 					self.types.unify(expected_type, self.types.bool);
 					let expr = self.typecheck_expr(expr, expected_type);
-					hir::ExprKind::MethodCall(expr.into(), "not".into(), vec![])
+					yahir::ExprKind::MethodCall(expr.into(), "not".into(), vec![])
 				}
 			},
 			ExprKind::Binary(lhs, op, rhs) => match op.kind {
 				BinOpKind::Minus => {
 					let lhs = self.typecheck_expr(lhs, expected_type);
 					let rhs = self.typecheck_expr(rhs, expected_type);
-					hir::ExprKind::MethodCall(lhs.into(), "sub".into(), vec![rhs])
+					yahir::ExprKind::MethodCall(lhs.into(), "sub".into(), vec![rhs])
 				}
 				BinOpKind::Plus => {
 					let lhs = self.typecheck_expr(lhs, expected_type);
 					let rhs = self.typecheck_expr(rhs, expected_type);
-					hir::ExprKind::MethodCall(lhs.into(), "add".into(), vec![rhs])
+					yahir::ExprKind::MethodCall(lhs.into(), "add".into(), vec![rhs])
 				}
 				BinOpKind::Slash => {
 					let lhs = self.typecheck_expr(lhs, expected_type);
 					let rhs = self.typecheck_expr(rhs, expected_type);
-					hir::ExprKind::MethodCall(lhs.into(), "div".into(), vec![rhs])
+					yahir::ExprKind::MethodCall(lhs.into(), "div".into(), vec![rhs])
 				}
 				BinOpKind::Star => {
 					let lhs = self.typecheck_expr(lhs, expected_type);
 					let rhs = self.typecheck_expr(rhs, expected_type);
-					hir::ExprKind::MethodCall(lhs.into(), "mul".into(), vec![rhs])
+					yahir::ExprKind::MethodCall(lhs.into(), "mul".into(), vec![rhs])
 				}
 				BinOpKind::Greater => {
 					self.types.unify(expected_type, self.types.bool);
 					let expected_type = self.types.add(UncheckedType::Unknown);
 					let lhs = self.typecheck_expr(lhs, expected_type);
 					let rhs = self.typecheck_expr(rhs, expected_type);
-					hir::ExprKind::MethodCall(lhs.into(), "gt".into(), vec![rhs])
+					yahir::ExprKind::MethodCall(lhs.into(), "gt".into(), vec![rhs])
 				}
 				BinOpKind::GreaterEqual => {
 					self.types.unify(expected_type, self.types.bool);
 					let expected_type = self.types.add(UncheckedType::Unknown);
 					let lhs = self.typecheck_expr(lhs, expected_type);
 					let rhs = self.typecheck_expr(rhs, expected_type);
-					hir::ExprKind::MethodCall(lhs.into(), "ge".into(), vec![rhs])
+					yahir::ExprKind::MethodCall(lhs.into(), "ge".into(), vec![rhs])
 				}
 				BinOpKind::Less => {
 					self.types.unify(expected_type, self.types.bool);
 					let expected_type = self.types.add(UncheckedType::Unknown);
 					let lhs = self.typecheck_expr(lhs, expected_type);
 					let rhs = self.typecheck_expr(rhs, expected_type);
-					hir::ExprKind::MethodCall(lhs.into(), "lt".into(), vec![rhs])
+					yahir::ExprKind::MethodCall(lhs.into(), "lt".into(), vec![rhs])
 				}
 				BinOpKind::LessEqual => {
 					self.types.unify(expected_type, self.types.bool);
 					let expected_type = self.types.add(UncheckedType::Unknown);
 					let lhs = self.typecheck_expr(lhs, expected_type);
 					let rhs = self.typecheck_expr(rhs, expected_type);
-					hir::ExprKind::MethodCall(lhs.into(), "le".into(), vec![rhs])
+					yahir::ExprKind::MethodCall(lhs.into(), "le".into(), vec![rhs])
 				}
 				BinOpKind::BangEqual => {
 					self.types.unify(expected_type, self.types.bool);
 					let expected_type = self.types.add(UncheckedType::Unknown);
 					let lhs = self.typecheck_expr(lhs, expected_type);
 					let rhs = self.typecheck_expr(rhs, expected_type);
-					hir::ExprKind::MethodCall(
-						hir::Expr { kind: hir::ExprKind::MethodCall(lhs.into(), "eq".into(), vec![rhs]), typ: self.types.bool }
-							.into(),
+					yahir::ExprKind::MethodCall(
+						yahir::Expr {
+							kind: yahir::ExprKind::MethodCall(lhs.into(), "eq".into(), vec![rhs]),
+							typ: self.types.bool,
+						}
+						.into(),
 						"not".into(),
 						vec![],
 					)
@@ -355,7 +363,7 @@ impl Typechecker {
 					let expected_type = self.types.add(UncheckedType::Unknown);
 					let lhs = self.typecheck_expr(lhs, expected_type);
 					let rhs = self.typecheck_expr(rhs, expected_type);
-					hir::ExprKind::MethodCall(lhs.into(), "eq".into(), vec![rhs])
+					yahir::ExprKind::MethodCall(lhs.into(), "eq".into(), vec![rhs])
 				}
 			},
 			ExprKind::FunctionCall(fname, arguments) => {
@@ -368,7 +376,7 @@ impl Typechecker {
 					let typ = self.types.add_exact(&typ);
 					args.push(self.typecheck_expr(arg, typ));
 				}
-				hir::ExprKind::FnCall(fname, args)
+				yahir::ExprKind::FnCall(fname, args)
 			}
 			// Store std types separately or inject them into program.types?
 			ExprKind::MethodCall(object, method_name, arguments) => {
@@ -380,15 +388,13 @@ impl Typechecker {
 					typechecked_args.push(self.typecheck_expr(argument, param_type));
 				}
 				self.types.unify(expected_type, result);
-				hir::ExprKind::MethodCall(object.into(), Str::from(*method_name), typechecked_args)
+				yahir::ExprKind::MethodCall(object.into(), Str::from(*method_name), typechecked_args)
 			}
-			_ => todo!(),
 		};
-		hir::Expr { kind, typ: expected_type }
+		yahir::Expr { kind, typ: expected_type }
 	}
 
 	fn resolve_method(&mut self, self_type_id: TypeId, method_name: &str) -> (Vec<TypeId>, TypeId) {
-		const DEBUG: bool = true;
 		// We cound have returned &FnSignature if Typechecker was splitted into two
 		// separate structs: ProgramTypechecker and FunctionTypechecker, then
 		// FunctionTypechecker would borrow ProgramTypechecker immutably and this
@@ -396,7 +402,7 @@ impl Typechecker {
 		use UncheckedType::*;
 		let self_type = self.types[self_type_id].clone();
 		if let Some((params, result)) = self.std_api.get(&(self_type, method_name)) {
-			if DEBUG {
+			if DEBUG_LOGGING {
 				println!("Found method {:?}.{}({:?}) -> {:?}", self_type, method_name, params, result);
 			}
 			let params = params.iter().map(|typ| if typ == &self_type { self_type_id } else { self.types.add(*typ) }).collect();
@@ -429,22 +435,22 @@ impl Typechecker {
 		panic!("Name error: variable not defined")
 	}
 
-	fn nullify(&self, mut expr: hir::Expr<TypeId>) -> hir::Expr<TypeId> {
+	fn nullify(&self, mut expr: yahir::Expr<TypeId>) -> yahir::Expr<TypeId> {
 		if self.types[expr.typ] == UncheckedType::Unit {
 			return expr;
 		}
 		// let mut stmts = match expr.kind {
-		// 	hir::ExprKind::Block(mut stmts) => stmts,
+		// 	yahir::ExprKind::Block(mut stmts) => stmts,
 		// 	_ => vec![expr],
 		// };
 		todo!()
-		// stmts.push(hir::Expr { kind: hir::ExprKind::Unit, typ: self.types.unit });
-		// hir::Expr { kind: hir::ExprKind::Block(stmts), typ: self.types.unit }
+		// stmts.push(yahir::Expr { kind: yahir::ExprKind::Unit, typ: self.types.unit });
+		// yahir::Expr { kind: yahir::ExprKind::Block(stmts), typ: self.types.unit }
 	}
 
 	fn parse_type(&self, typename: &str) -> Type {
 		match typename {
-			"()" => Type::Unit,
+			"()" | "" => Type::Unit,
 			"bool" => Type::Bool,
 			"i32" => Type::I32,
 			"u32" => Type::U32,

@@ -41,6 +41,10 @@ fn main() {
 			}
 		}
 		_ => {
+			// let source = fs::read_to_string(&args[1]).unwrap() + include_str!("ppkn/std.ppkn");
+			// let lir = ppkn::to_lir(&source).unwrap();
+			// let mut intrerpreter = ppkn::yalir_interpreter::Interpreter::new(&lir);
+			// intrerpreter.interpret("main").unwrap();
 			let source = fs::read_to_string(&args[1]).unwrap();
 			checked(&source, run(&source));
 		}

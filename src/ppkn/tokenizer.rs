@@ -37,6 +37,8 @@ impl<'a> Tokenizer<'a> {
 			')' => Some(RightParen),
 			'{' => Some(LeftBrace),
 			'}' => Some(RightBrace),
+			'[' => Some(LeftBracket),
+			']' => Some(RightBracket),
 			',' => Some(Comma),
 			'.' => Some(Dot),
 			'-' => Some(Minus),
@@ -118,7 +120,7 @@ impl<'a> Tokenizer<'a> {
 	fn keyword_or_identifier(&mut self) -> TokenKind {
 		let mut name = String::new();
 		while let Some(ch) = self.next_char() {
-			if "(){},.-+:;/*!=><#'\"\t\n\r ".contains(ch) {
+			if "(){}[],.-+:;/*!=><#'\"\t\n\r ".contains(ch) {
 				self.position -= ch.len_utf8();
 				break;
 			}

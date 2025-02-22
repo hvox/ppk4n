@@ -1,4 +1,6 @@
 #![allow(dead_code)]
+
+use super::ast::Identifier;
 #[derive(Clone, Debug, PartialEq)]
 pub struct Token<'a> {
 	pub source: &'a str,
@@ -12,6 +14,8 @@ pub enum TokenKind {
 	RightParen,
 	LeftBrace,
 	RightBrace,
+	LeftBracket,
+	RightBracket,
 	Comma,
 	Dot,
 	Minus,
@@ -64,6 +68,13 @@ pub enum TokenKind {
 impl<'a> Token<'a> {
 	pub fn new(source: &'a str, kind: TokenKind) -> Self {
 		Self { source, kind }
+	}
+
+	pub fn is_identifier(&self) -> bool {
+		match self.kind {
+			TokenKind::Identifier(..) => true,
+			_ => false,
+		}
 	}
 
 	// pub fn start_position_in(&self, source: &str) -> usize {

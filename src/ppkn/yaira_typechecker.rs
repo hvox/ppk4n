@@ -71,7 +71,7 @@ impl Typechecker {
 		let mut bodies = Vec::new();
 		for Expr { source, kind, annotations } in &ast.stmts {
 			match kind {
-				ExprKind::Function(name, parameters, body) => {
+				ExprKind::Function(name, parameters, _, body) => {
 					// TODO: Where function result type?
 					let name = Str::from(*name);
 					let mut params = vec![];
@@ -201,7 +201,7 @@ impl Typechecker {
 				}
 			}
 			// TODO: all the other things here
-			ExprKind::Function(_, items, block) => todo!(),
+			ExprKind::Function(..) => todo!(),
 			ExprKind::Class(_, items) => todo!(),
 			ExprKind::Import(_) => todo!(),
 			ExprKind::Integer(_) => todo!(),
@@ -213,6 +213,7 @@ impl Typechecker {
 			ExprKind::Binary(expr, bin_op, expr1) => todo!(),
 			ExprKind::FunctionCall(_, exprs) => todo!(),
 			ExprKind::MethodCall(_, _, exprs) => todo!(),
+			_ => todo!(),
 		};
 		Code { kind, typ: expected_type }
 	}

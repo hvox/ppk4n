@@ -27,8 +27,17 @@ pub mod hir_gen;
 pub mod lir;
 pub mod lir_interpreter;
 
+pub mod yahir;
+pub mod yahir_compiler;
+pub mod yahir_gen;
+pub mod yalir;
+pub mod yalir_interpreter;
+
 use mir::Program;
 
+const DEBUG_LOGGING: bool = false;
+
+#[derive(Debug)]
 pub struct PpknError<'a> {
 	pub typ: &'static str,
 	pub message: &'static str,
@@ -40,17 +49,33 @@ pub fn parse(source: &str) -> Result<Program, PpknError> {
 	let ast = parser::parse(tokens)?;
 
 	use std::io::IsTerminal;
-	#[cfg(debug_assertions)]
-	if std::io::stdout().is_terminal() {
-		let hir = hir_gen::typecheck(&ast).unwrap();
+	if DEBUG_LOGGING && std::io::stdout().is_terminal() {
+		let hir = yahir_gen::typecheck(&ast).unwrap();
 		println!("\x1b[91m[HIR] {:?}\x1b[0m", hir);
-		let lir = hir_compiler::lower_hir_to_lir(&hir);
+		let lir = yahir_compiler::lower_hir_to_lir(&hir);
 		println!("\x1b[93m[LIR] {:?}\x1b[0m", lir);
 		print!("\x1b[92m[OUTPUT]: ");
 		print!("\x1b[0m");
 	}
 	let program = mir_generator::typecheck(ast)?;
 	Ok(program)
+}
+
+pub fn to_lir(source: &str) -> Result<yalir::Program, PpknError> {
+	let tokens = tokenizer::tokenize(source);
+	let ast = parser::parse(tokens)?;
+	let hir = yahir_gen::typecheck(&ast).unwrap();
+	use std::io::IsTerminal;
+	if DEBUG_LOGGING && std::io::stdout().is_terminal() {
+		println!("\x1b[91m[HIR] {:?}\x1b[0m", hir);
+	}
+	let lir = yahir_compiler::lower_hir_to_lir(&hir);
+	if DEBUG_LOGGING && std::io::stdout().is_terminal() {
+		println!("\x1b[93m[LIR] {:?}\x1b[0m", lir);
+		print!("\x1b[92m[OUTPUT]: ");
+		print!("\x1b[0m");
+	}
+	Ok(lir)
 }
 
 pub fn run(source: &str) -> Result<(), PpknError> {
