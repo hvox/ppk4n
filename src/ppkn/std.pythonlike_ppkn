@@ -1,13 +1,13 @@
-fun i32_to_str(number: i32) -> str {
+fun i32_to_str(number: i32) -> str:
 	result: str = ""
 	digits: [str] = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9"]
-	while number > 0 {
+	while number > 0:
 		result = result + digits[number % 10]
 		number = number / 10
-	}
-}
 
-fun add_strings(lhs: u32, rhs: u32) -> str {
+
+
+fun add_strings(lhs: u32, rhs: u32) -> str:
 	lhs_size: u32 = (lhs + 4).load_u32()
 	rhs_size: u32 = (rhs + 4).load_u32()
 	size: u32 = lhs_size + rhs_size
@@ -19,30 +19,30 @@ fun add_strings(lhs: u32, rhs: u32) -> str {
 	drop_str(lhs)
 	drop_str(rhs)
 	result
-}
 
-fun drop_str(str: u32) {
+
+fun drop_str(str: u32):
 	counter: u32 = str.load_u32() - 1
-	if counter == 0 {
+	if counter == 0:
 		free(str)
-	else {
+	else:
 		str.save_u32(counter)
-	}
-}
+
+
 
 stack_end: u32 = 1234
 
-fun malloc(size: u32) -> u32 {
+fun malloc(size: u32) -> u32:
 	result: u32 = stack_end
 	stack_end = stack_end + size
 	return result
-}
 
-fun free(memory: u32, size: u32) {
-	if memory + size == stack_end {
+
+fun free(memory: u32, size: u32):
+	if memory + size == stack_end:
 		stack_end = stack_end - size
-	}
-}
+
+
 
 
 
