@@ -8,6 +8,7 @@ use std::{
 use ppkn::{parse, run, PpknError};
 use utils::stringify_lossy;
 
+mod pythonlike_ppkn;
 mod ppkn;
 mod utils;
 
