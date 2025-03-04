@@ -128,7 +128,7 @@ impl<'a> Parser<'a> {
 		})?;
 		let typename = self.expect_typename()?;
 		// println!("{:?}", &self.tokens[self.position - 1..self.position + 2]);
-		let equal_sign = self.expect(TokenKind::Equal).map_err(|err| {
+		let _equal_sign = self.expect(TokenKind::Equal).map_err(|err| {
 			self.position = start_position;
 			err
 		})?;

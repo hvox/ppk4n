@@ -1,6 +1,5 @@
 #![allow(dead_code)]
 
-use super::ast::Identifier;
 #[derive(Clone, Debug, PartialEq)]
 pub struct Token<'a> {
 	pub source: &'a str,

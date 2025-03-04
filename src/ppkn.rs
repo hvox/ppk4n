@@ -45,6 +45,10 @@ pub struct PpknError<'a> {
 }
 
 pub fn parse(source: &str) -> Result<Program, PpknError> {
+	const USE_YALIR: bool = false;
+	if USE_YALIR {
+		let _ = to_lir(source);
+	}
 	let tokens = tokenizer::tokenize(source);
 	let ast = parser::parse(tokens)?;
 
