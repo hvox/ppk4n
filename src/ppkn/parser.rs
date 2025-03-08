@@ -1,9 +1,11 @@
 use core::str;
+use std::collections::HashMap;
 use std::slice;
 
 use super::ast::{self, BinOp, BinOpKind, Identifier, Typename};
 use super::token::{Token, TokenKind};
 
+const BACKTRACK_LOGGING: bool = false;
 const DEBUG_LOGGING: bool = false;
 
 type Block<'a> = ast::Block<'a, ()>;
@@ -18,6 +20,7 @@ struct Parser<'a> {
 	tokens: Vec<Token<'a>>,
 	position: usize,
 	last_error: SyntaxError<'a>,
+	call_counter: HashMap<(&'static str, usize), u64>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -35,7 +38,7 @@ impl<'a> SyntaxError<'a> {
 impl<'a> Parser<'a> {
 	fn new(tokens: Vec<Token<'a>>) -> Self {
 		let error = SyntaxError::new(&tokens[0], "hopeless start");
-		Self { tokens, position: 0, last_error: error }
+		Self { tokens, position: 0, last_error: error, call_counter: HashMap::new() }
 	}
 
 	fn parse(mut self) -> Result<Block<'a>, SyntaxError<'a>> {
@@ -43,10 +46,26 @@ impl<'a> Parser<'a> {
 		if self.position < self.tokens.len() - 1 {
 			return Err(self.last_error);
 		}
+		if BACKTRACK_LOGGING {
+			let mut stats = HashMap::new();
+			for ((f, _), calls) in self.call_counter {
+				stats
+					.entry(f)
+					.and_modify(|x: &mut (u64, u64)| {
+						x.0 += calls;
+						x.1 += 1;
+					})
+					.or_insert((calls, 1));
+			}
+			for (f, stats) in stats {
+				println!("{:10}: {}/{} = {}", f, stats.0, stats.1, stats.0 as f64 / stats.1 as f64);
+			}
+		}
 		Ok(module)
 	}
 
 	fn block(&mut self) -> Result<Block<'a>, SyntaxError<'a>> {
+		self.call_counter.entry(("block", self.position)).and_modify(|x| *x += 1).or_insert(1);
 		if DEBUG_LOGGING {
 			eprintln!("Parsing block at {:?}", &self.tokens[self.position..self.tokens.len().min(self.position + 4)]);
 		}
@@ -61,6 +80,7 @@ impl<'a> Parser<'a> {
 	}
 
 	fn statement(&mut self) -> Result<Expr<'a>, SyntaxError<'a>> {
+		self.call_counter.entry(("statement", self.position)).and_modify(|x| *x += 1).or_insert(1);
 		if DEBUG_LOGGING {
 			eprintln!("Parsing stmt at {:?}", &self.tokens[self.position..self.tokens.len().min(self.position + 4)]);
 		}
@@ -94,6 +114,7 @@ impl<'a> Parser<'a> {
 	}
 
 	fn print(&mut self) -> Result<Expr<'a>, SyntaxError<'a>> {
+		self.call_counter.entry(("print", self.position)).and_modify(|x| *x += 1).or_insert(1);
 		self.expect(TokenKind::Print)?;
 		match self.expression() {
 			Ok(expr) => Ok(expr),
@@ -105,6 +126,7 @@ impl<'a> Parser<'a> {
 	}
 
 	fn println(&mut self) -> Result<Expr<'a>, SyntaxError<'a>> {
+		self.call_counter.entry(("println", self.position)).and_modify(|x| *x += 1).or_insert(1);
 		self.expect(TokenKind::Println)?;
 		match self.expression() {
 			Ok(expr) => Ok(expr),
@@ -116,6 +138,7 @@ impl<'a> Parser<'a> {
 	}
 
 	fn definition(&mut self) -> Result<(Identifier<'a>, Typename<'a>, Box<Expr<'a>>), SyntaxError<'a>> {
+		self.call_counter.entry(("definition", self.position)).and_modify(|x| *x += 1).or_insert(1);
 		if DEBUG_LOGGING {
 			eprintln!("Parsing definition at {:?}", &self.tokens[self.position..self.tokens.len().min(self.position + 4)]);
 		}
@@ -140,7 +163,7 @@ impl<'a> Parser<'a> {
 	}
 
 	fn assignment(&mut self) -> Result<(Identifier<'a>, Box<Expr<'a>>), SyntaxError<'a>> {
-		// println!("{:?}", &self.tokens[self.position..]);
+		self.call_counter.entry(("assignment", self.position)).and_modify(|x| *x += 1).or_insert(1);
 		let start_position = self.position;
 		let variable = self.expect_identifier()?;
 		self.expect(TokenKind::Equal).map_err(|err| {
@@ -155,6 +178,7 @@ impl<'a> Parser<'a> {
 	}
 
 	fn if_statement(&mut self) -> Result<Expr<'a>, SyntaxError<'a>> {
+		self.call_counter.entry(("ifelse", self.position)).and_modify(|x| *x += 1).or_insert(1);
 		let start_position = self.position;
 		let start = self.expect(TokenKind::If)?;
 		let condition = self.expression().map_err(|err| {
@@ -177,6 +201,7 @@ impl<'a> Parser<'a> {
 	}
 
 	fn while_loop(&mut self) -> Result<Expr<'a>, SyntaxError<'a>> {
+		self.call_counter.entry(("while_loop", self.position)).and_modify(|x| *x += 1).or_insert(1);
 		let start_position = self.position;
 		let start = self.expect(TokenKind::While)?;
 		let condition = self.expression().map_err(|err| {
@@ -200,6 +225,7 @@ impl<'a> Parser<'a> {
 	}
 
 	fn return_statement(&mut self) -> Result<Expr<'a>, SyntaxError<'a>> {
+		self.call_counter.entry(("return", self.position)).and_modify(|x| *x += 1).or_insert(1);
 		let start_position = self.position;
 		let start = self.expect(TokenKind::Return)?;
 		let return_value = self.expression().map_err(|err| {
@@ -210,6 +236,7 @@ impl<'a> Parser<'a> {
 	}
 
 	fn function(&mut self) -> Result<Expr<'a>, SyntaxError<'a>> {
+		self.call_counter.entry(("function", self.position)).and_modify(|x| *x += 1).or_insert(1);
 		let start_position = self.position;
 		let first_token = self.expect(TokenKind::Fun)?;
 		let name = self.expect_identifier().map_err(|err| {
@@ -259,6 +286,7 @@ impl<'a> Parser<'a> {
 	}
 
 	fn function_arguments(&mut self) -> Result<Vec<(Identifier<'a>, Typename<'a>)>, SyntaxError<'a>> {
+		self.call_counter.entry(("args", self.position)).and_modify(|x| *x += 1).or_insert(1);
 		let start_position = self.position;
 		let mut args = vec![];
 		loop {
@@ -285,6 +313,7 @@ impl<'a> Parser<'a> {
 	}
 
 	fn expression(&mut self) -> Result<Expr<'a>, SyntaxError<'a>> {
+		self.call_counter.entry(("expr", self.position)).and_modify(|x| *x += 1).or_insert(1);
 		use TokenKind::*;
 		let mut expr = self.arithmetic_expression()?;
 		if let Ok(op) = self.expect_any(&[Less, LessEqual, EqualEqual, GreaterEqual, Greater, BangEqual]) {
@@ -307,6 +336,7 @@ impl<'a> Parser<'a> {
 	}
 
 	fn arithmetic_expression(&mut self) -> Result<Expr<'a>, SyntaxError<'a>> {
+		self.call_counter.entry(("sum", self.position)).and_modify(|x| *x += 1).or_insert(1);
 		use TokenKind::*;
 		let mut sum = self.term()?;
 		while let Ok(op) = self.expect_any(&[Plus, Minus]) {
@@ -326,6 +356,7 @@ impl<'a> Parser<'a> {
 	}
 
 	fn term(&mut self) -> Result<Expr<'a>, SyntaxError<'a>> {
+		self.call_counter.entry(("term", self.position)).and_modify(|x| *x += 1).or_insert(1);
 		use TokenKind::*;
 		let mut product = self.factor()?;
 		while let Ok(op) = self.expect_any(&[Star, Slash]) {
@@ -345,6 +376,7 @@ impl<'a> Parser<'a> {
 	}
 
 	fn factor(&mut self) -> Result<Expr<'a>, SyntaxError<'a>> {
+		self.call_counter.entry(("factor", self.position)).and_modify(|x| *x += 1).or_insert(1);
 		if let Ok(call) = self.function_call() {
 			return Ok(call);
 		}
@@ -355,6 +387,7 @@ impl<'a> Parser<'a> {
 	}
 
 	fn function_call(&mut self) -> Result<Expr<'a>, SyntaxError<'a>> {
+		self.call_counter.entry(("call", self.position)).and_modify(|x| *x += 1).or_insert(1);
 		let start_position = self.position;
 		let function = self.unary().map_err(|err| {
 			self.position = start_position;
@@ -382,6 +415,7 @@ impl<'a> Parser<'a> {
 	}
 
 	fn method_call(&mut self) -> Result<Expr<'a>, SyntaxError<'a>> {
+		self.call_counter.entry(("method", self.position)).and_modify(|x| *x += 1).or_insert(1);
 		let start_position = self.position;
 		let object = self.unary().map_err(|err| {
 			self.position = start_position;
@@ -418,6 +452,7 @@ impl<'a> Parser<'a> {
 	}
 
 	fn unary(&mut self) -> Result<Expr<'a>, SyntaxError<'a>> {
+		self.call_counter.entry(("unary", self.position)).and_modify(|x| *x += 1).or_insert(1);
 		let start_position = self.position;
 		if self.expect(TokenKind::LeftParen).is_ok() {
 			let content = self.expression().map_err(|err| {
@@ -459,6 +494,7 @@ impl<'a> Parser<'a> {
 	}
 
 	fn expect_typename(&mut self) -> Result<&'a str, SyntaxError<'a>> {
+		self.call_counter.entry(("typename", self.position)).and_modify(|x| *x += 1).or_insert(1);
 		if DEBUG_LOGGING {
 			eprintln!("Parsing typename at {:?}", &self.tokens[self.position..self.tokens.len().min(self.position + 4)]);
 		}
