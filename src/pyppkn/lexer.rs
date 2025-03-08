@@ -7,13 +7,15 @@ struct Lexer<'src> {
 	// TODO: use iterator
 	source: &'src str,
 	position: usize,
+	indentation: usize,
+	tokens: Vec<Token>,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub struct Token {
-	position: u16,
-	length: u8,
-	kind: TokenKind,
+	pub position: u16,
+	pub length: u8,
+	pub kind: TokenKind,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
@@ -85,20 +87,21 @@ impl Token {
 
 impl<'s> Lexer<'s> {
 	fn new(source: &'s str) -> Self {
-		Self { source, position: 0 }
+		Self { source, position: 0, indentation: 0, tokens: vec![] }
 	}
 
-	fn tokenize(&mut self) -> Vec<Token> {
-		let mut tokens = vec![];
+	fn tokenize(mut self) -> Vec<Token> {
 		// Separate loop with faster check.
 		// TODO: check if it really improves performance
 		while self.position < self.source.len() {
-			tokens.push(self.next());
+			let token = self.next();
+			self.tokens.push(token);
 		}
-		while !tokens.last().is_some_and(|eof| eof.kind == TokenKind::Eof) {
-			tokens.push(self.next());
+		while !self.tokens.last().is_some_and(|eof| eof.kind == TokenKind::Eof) {
+			let token = self.next();
+			self.tokens.push(token);
 		}
-		tokens
+		self.tokens
 	}
 
 	fn next(&mut self) -> Token {
@@ -164,6 +167,32 @@ impl<'s> Lexer<'s> {
 				self.position -= 1;
 				self.number()
 			}
+			'\n' => {
+				if self.position == self.source.len() {
+					if self.indentation > 0 {
+						self.indentation -= 1;
+						Dedent
+					} else {
+						Eof
+					}
+				} else {
+					while matches!(self.peek(), '\t' | '\x0C' | '\r' | ' ') {
+						self.read();
+					}
+					let current_indent = self.position - start - 1;
+					if self.peek() != '\n' {
+						while current_indent > self.indentation {
+							self.tokens.push(Token::new(start + 1, current_indent, Indent));
+							self.indentation += 1;
+						}
+						while current_indent < self.indentation {
+							self.tokens.push(Token::new(start + 1, current_indent, Dedent));
+							self.indentation -= 1;
+						}
+					}
+					return self.next();
+				}
+			}
 			'"' => self.string(),
 			_ => {
 				while !matches!(self.peek(), '\t'..='/' | ':'..='@' | '['..='^' | '{'..='~') {
@@ -224,9 +253,13 @@ impl<'s> Lexer<'s> {
 	}
 
 	fn read(&mut self) -> char {
-		let chr = self.peek();
-		self.position += chr.len_utf8();
-		chr
+		match self.source[self.position..].chars().next() {
+			Some(chr) => {
+				self.position += chr.len_utf8();
+				chr
+			}
+			None => '\n',
+		}
 	}
 
 	fn peek(&self) -> char {
