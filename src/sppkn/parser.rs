@@ -132,7 +132,7 @@ impl<'s> Parser<'s> {
 						dependencies.push(Dependency { location: self.tokens[position + 1].span(), name });
 						position = pos;
 					} else {
-						self.errors.push(SyntaxError::new(self.tokens[position + 1].span(), "Expected module name"));
+						self.error(position + 1, "Expected module name");
 					}
 				}
 				Let => {
@@ -149,11 +149,11 @@ impl<'s> Parser<'s> {
 				}
 				Linend => position += 1,
 				Indent => {
-					self.errors.push(SyntaxError::new(self.tokens[position].span(), "Unexpected indent"));
+					self.error(position, "Unexpected indent");
 					position = self.skip_block(position + 1);
 				}
 				_ => {
-					self.errors.push(SyntaxError::new(self.tokens[position].span(), "Unexpected unfunny code"));
+					self.error(position, "Unexpected unfunny code");
 					position = self.skip_line(position + 1);
 				}
 			}
@@ -290,11 +290,16 @@ impl<'s> Parser<'s> {
 			}
 			Identifier => {
 				let (name, pos) = self.parse_identifier(position)?;
+				if self.tokens[pos].kind == LeftParen {
+					let (args, pos) = self.parse_arguments(pos);
+					let expr = Expr { location: self.tokens[position].span(), kind: ExprKind::FnCall(name, args) };
+					return Ok((expr.into(), pos));
+				}
 				let expr = Expr { location: self.tokens[position].span(), kind: ExprKind::Identifier(name) };
 				return Ok((expr.into(), pos));
 			}
 			Integer => {
-				let (value, pos) = self.parse_identifier(position)?;
+				let (value, pos) = self.parse_integer(position);
 				let expr = Expr { location: self.tokens[position].span(), kind: ExprKind::Integer(value) };
 				return Ok((expr.into(), pos));
 			}
@@ -320,12 +325,12 @@ impl<'s> Parser<'s> {
 			}
 			Linend | Dedent => {
 				let expr = Expr { location: self.tokens[position].span(), kind: ExprKind::Unreachable };
-				self.errors.push(SyntaxError::new(self.tokens[position].span(), "Expected expression"));
+				self.error(position, "Expected expression");
 				return Ok((expr.into(), position));
 			}
 			_ => {
 				let expr = Expr { location: self.tokens[position].span(), kind: ExprKind::Unreachable };
-				self.errors.push(SyntaxError::new(self.tokens[position].span(), "Expected expression"));
+				self.error(position, "Expected expression");
 				return Ok((expr.into(), position + 1));
 			}
 		}
@@ -371,7 +376,7 @@ impl<'s> Parser<'s> {
 				Ok((typ, pos))
 			}
 			_ => {
-				self.errors.push(SyntaxError::new(self.tokens[position].span(), "Expected typename"));
+				self.error(position, "Expected typename");
 				Err(())
 			}
 		}
@@ -389,7 +394,7 @@ impl<'s> Parser<'s> {
 			position = pos;
 			stmts.push(stmt);
 			if !matches!(self.tokens[pos].kind, TokenKind::Linend | TokenKind::Indent) {
-				self.errors.push(SyntaxError::new(self.tokens[position].span(), "Expected end of line"));
+				self.error(position, "Expected end of line");
 				position = self.skip_line(position);
 			}
 			while self.tokens[position].kind == TokenKind::Linend {
@@ -436,7 +441,7 @@ impl<'s> Parser<'s> {
 				(Typename { location: self.tokens[id_pos].span(), kind: TypenameKind::Unknown }, pos)
 			};
 			if self.tokens[pos].kind != Equal {
-				self.errors.push(SyntaxError::new(self.tokens[pos].span(), "Expected `=`"));
+				self.error(pos, "Expected `=`");
 				return (
 					Stmt::Expression(Expr { location: self.tokens[id_pos].span(), kind: ExprKind::Unreachable }),
 					self.skip_line(pos),
@@ -460,17 +465,40 @@ impl<'s> Parser<'s> {
 		(Stmt::Expression((*expr).clone()), pos)
 	}
 
+	fn parse_arguments(&mut self, position: usize) -> (Vec<Expr>, usize) {
+		use TokenKind::*;
+		if self.tokens[position].kind != LeftParen {
+			self.error(position, "expected '('");
+			return (vec![], position + (self.tokens[position].kind != Eof) as usize);
+		}
+		let mut args = vec![];
+		let mut position = position + 1;
+		while !matches!(self.tokens[position].kind, RightParen | Linend) {
+			let Ok((argument, pos)) = self.parse_expr(position) else { break };
+			args.push((*argument).clone());
+			position = self.try_parse_token(pos, Comma).unwrap_or(pos);
+		}
+		if self.tokens[position].kind == RightParen {
+			(args, position + 1)
+		} else {
+			self.error(position, "expected ')'");
+			(args, position)
+		}
+	}
+
 	fn try_parse_token(&mut self, position: usize, token: TokenKind) -> Result<usize, ()> {
-		self.parse_token(position, token).map_err(|_| {
-			self.errors.pop();
-		})
+		if self.tokens[position].kind == token {
+			Ok(position + 1)
+		} else {
+			Err(())
+		}
 	}
 
 	fn parse_token(&mut self, position: usize, token: TokenKind) -> Result<usize, ()> {
 		if self.tokens[position].kind == token {
 			Ok(position + 1)
 		} else {
-			self.errors.push(SyntaxError::new(self.tokens[position].span(), "Invalid syntax"));
+			self.error(position, "Invalid syntax");
 			Err(())
 		}
 	}
@@ -488,8 +516,20 @@ impl<'s> Parser<'s> {
 	}
 
 	fn parse_identifier(&mut self, position: usize) -> Result<(Str, usize), ()> {
-		self.try_parse_identifier(position)
-			.map_err(|_| self.errors.push(SyntaxError::new(self.tokens[position].span(), "Expected an identifier")))
+		self.try_parse_identifier(position).map_err(|_| self.error(position, "Expected an identifier"))
+	}
+
+	fn parse_integer(&mut self, mut position: usize) -> (Str, usize) {
+		let token = self.tokens[position];
+		if token.kind == TokenKind::Integer {
+			let token_start = usize::from(token.position);
+			let token_end = token_start + usize::from(token.length);
+			let name = self.source[token_start..token_end].into();
+			(name, position + 1)
+		} else {
+			self.error(position, "expected integer literal");
+			("".into(), position)
+		}
 	}
 
 	fn parse_string(&mut self, position: usize) -> Str {
@@ -527,6 +567,15 @@ impl<'s> Parser<'s> {
 			position += 1;
 		}
 		position
+	}
+
+	fn error(&mut self, position: usize, message: &'static str) {
+		if DEBUG_LOGGING {
+			eprintln!("SYNTAX ERROR: {:?} <- {:?}", self.tokens[position], message);
+		}
+		let location = self.tokens[position].span();
+		let error = SyntaxError::new(location, message);
+		self.errors.push(error);
 	}
 }
 
