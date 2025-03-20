@@ -144,6 +144,11 @@ impl Program {
 		let globals = HashMap::new();
 		let functions = HashMap::new();
 		let types = HashMap::new();
+		let mut sources = sources;
+		if !sources.contains_key("std") {
+			let std_source = include_str!("std.ppkn");
+			sources.insert("std".into(), std_source.into());
+		}
 		let program = Self { poisoned: false, main, root, sources, modules, globals, functions, types };
 		program
 	}

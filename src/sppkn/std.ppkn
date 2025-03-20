@@ -1,0 +1,22 @@
+# PPKN STD PROTOTYPE
+
+mut HEAP_END: u32 = 32768
+
+
+fun clone_bytes(src: u32, size: u32) -> (u32, u32)
+	let dst: u32 = malloc(size)
+	memory_copy(dst, src, size)
+	(dst, size)
+
+
+fun malloc(size: u32) -> u32
+	let ptr: u32 = HEAP_END
+	HEAP_END = HEAP_END + size
+	ptr
+
+
+fun free(ptr: u32, size: u32)
+	if ptr + size == HEAP_END
+		HEAP_END = ptr
+
+# END
