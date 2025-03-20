@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use std::process::exit;
 use std::hash::Hash;
 use std::hash::Hasher;
+use std::rc::Rc;
 
 use ppkn::{parse, run, PpknError};
 use utils::stringify_lossy;
@@ -15,6 +16,7 @@ mod sppkn;
 mod utils;
 
 const USE_SPPKN_IMPLEMENTATION: bool = false;
+const SPPKN_INNER_LOADER: bool = true;
 
 fn main() {
 	let args: Vec<_> = args().collect();
@@ -47,22 +49,29 @@ fn main() {
 		}
 		_ => {
 			if USE_SPPKN_IMPLEMENTATION {
+				println!("LIR Instruction size: {:?}", size_of::<sppkn::lir::Instr>());
+
 				let path = PathBuf::from(&args[1]);
 				let source = fs::read_to_string(&path).unwrap();
 
-				use sppkn::loader;
-				let loader = loader::load(path.parent().unwrap().into(), "main".into(), source.clone().into());
-				if false {
-					for (name, module) in loader.modules {
-						println!("\t{:?} : {:?}", name, module);
+				if !SPPKN_INNER_LOADER {
+					use sppkn::loader;
+					let loader = loader::load(path.parent().unwrap().into(), "main".into(), source.clone().into());
+					if false {
+						for (name, module) in loader.modules {
+							println!("\t{:?} : {:?}", name, module);
+						}
+						println!("\nERRORS: {:?}", loader.errors);
 					}
-					println!("\nERRORS: {:?}", loader.errors);
 				}
 
+				let name = Rc::<str>::from(path.file_stem().unwrap().to_string_lossy());
 				let src_root = path.parent().unwrap();
-				let sources = HashMap::from([("TODO".into(), source.into())]);
-				let mut program = sppkn::hir::Program::new(src_root, sources);
-				if let Err(errors) = program.load_and_typecheck("TODO".into()) {
+				let sources = HashMap::from([(name.clone(), source.into())]);
+				let mut program = sppkn::hir::Program::new(src_root, sources, name.clone());
+				if let Err(errors) = program.load_and_typecheck(name.into()) {
+					let skip_panics = false;
+					let mut last_error = (0, 0);
 					for error in errors {
 						let source = &program.sources[&error.module];
 						let (start, end) = error.cause_location;
@@ -76,6 +85,11 @@ fn main() {
 							line_no += 1;
 						}
 						let column = start as usize + 1 - line_start;
+						if skip_panics && (line_no, column) == last_error {
+							continue;
+						} else {
+							last_error = (line_no, column);
+						}
 						let line = source[line_start..].lines().next().unwrap();
 						let path = error.module; // TODO
 						println!("{:?} at {}:{}:{}", error.kind, path, line_no, column);
@@ -84,7 +98,14 @@ fn main() {
 					}
 					return;
 				};
-				println!("{:?}", program);
+				eprintln!("\tSource path = {:?}", program.root);
+				eprintln!("\t{:?}", program.sources);
+				eprintln!("\t{:?}", program.modules);
+				eprintln!("\tGlobals: {:?}", program.globals);
+				eprintln!("Functions:");
+				for (name, func) in &program.functions {
+					eprintln!("    {}: {:?}", name, func);
+				}
 			} else {
 				let source = fs::read_to_string(&args[1]).unwrap() + include_str!("ppkn/std.ppkn");
 				let lir = ppkn::to_lir(&source).unwrap();

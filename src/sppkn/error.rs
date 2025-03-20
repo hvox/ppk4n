@@ -56,6 +56,6 @@ impl From<SyntaxError> for Error {
 		let cause_location = error.cause_location;
 		let message = error.message.into();
 		let kind = PpknErrorKind::SyntaxError;
-		Self { module: "TODO".into(), cause_location, message, kind }
+		Self { module: todo!(), cause_location, message, kind }
 	}
 }

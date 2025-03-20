@@ -8,6 +8,7 @@ use std::{
 	ops::{Add, Deref, Index, IndexMut},
 	path::{Path, PathBuf},
 	rc::Rc,
+	time::Instant,
 };
 
 use ordered_float::Float;
@@ -20,6 +21,7 @@ use PpknErrorKind::*;
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Program {
 	poisoned: bool,
+	pub main: Str,
 	pub root: PathBuf,
 	pub sources: HashMap<Str, Str>,
 	pub modules: HashMap<Str, Module>,
@@ -132,7 +134,7 @@ pub struct TypeId(u32);
 type Str = Rc<str>;
 
 impl Program {
-	pub fn new<Path>(source_root_path: Path, sources: HashMap<Str, Str>) -> Self
+	pub fn new<Path>(source_root_path: Path, sources: HashMap<Str, Str>, main: Str) -> Self
 	where
 		Path: Into<PathBuf>,
 	{
@@ -141,7 +143,7 @@ impl Program {
 		let globals = HashMap::new();
 		let functions = HashMap::new();
 		let types = HashMap::new();
-		let program = Self { poisoned: false, root, sources, modules, globals, functions, types };
+		let program = Self { poisoned: false, main, root, sources, modules, globals, functions, types };
 		program
 	}
 
@@ -184,7 +186,7 @@ impl Program {
 				}
 			};
 			let (ast, syntax_errors) = super::parser::parse(&source);
-			errors.extend(syntax_errors.into_iter().map(|error| error.into()));
+			errors.extend(syntax_errors.into_iter().map(|error| error.into_error(name.clone())));
 			for dependency in &ast.dependencies {
 				parse_queue.push((dependency.name.clone(), name.clone(), dependency.location));
 			}
@@ -213,7 +215,8 @@ impl Program {
 				}
 				None => None,
 			};
-			self.globals.insert(name, (typ, body));
+			let path = format!("{}.{}", module_name, name).into();
+			self.globals.insert(path, (typ, body));
 		}
 		for (_, function) in &ast.functions {
 			let name = function.name.clone();
@@ -223,7 +226,8 @@ impl Program {
 			let typechecker = BodyTypechecker::new(&self, module_name, &result, &params[..]);
 			let (body, new_errors) = typechecker.typecheck_body(&function.body);
 			let function = Function { module: module_name.into(), name: name.clone(), parameters: params, result, body };
-			self.functions.insert(name, function);
+			let path = format!("{}.{}", module_name, name).into();
+			self.functions.insert(path, function);
 			errors.extend(new_errors);
 		}
 		if errors.is_empty() {
@@ -331,9 +335,7 @@ impl Types {
 			(UnkInt, Uint(x)) => Uint(x),
 			(Float(x), UnkFloat) => Float(x),
 			(UnkFloat, Float(x)) => Float(x),
-			(x, y) => {
-				todo!("{:?} != {:?}", x, y)
-			}
+			(x, y) => return Err((x, y)),
 		};
 		let (u, v) = (u_hndl.min(v_hndl), v_hndl.max(u_hndl));
 		self.types.remove(&u);
@@ -604,8 +606,7 @@ impl<'a> BodyTypechecker<'a> {
 						// }
 						(MethodCall(receiver.into(), method.clone(), args), result_type)
 					} else {
-						let error_message =
-							format!("this method takes {} arguments but {} arguments were supplied", params.len(), args.len());
+						let error_message = format!("this method takes {} arguments but {} were given", params.len(), args.len());
 						self.error(TypeError, loc, error_message);
 						// TODO: prettify
 						let args = args
@@ -630,9 +631,20 @@ impl<'a> BodyTypechecker<'a> {
 				}
 			}
 			ExprKind::FnCall(function, args) => {
-				if let Ok((params, result_type)) = self.resolve_function(function) {
-					let args = args.iter().zip(params).map(|(x, t)| self.typecheck(x, t)).collect();
-					(FnCall(function.clone(), args), result_type)
+				if let Ok((path, params, result_type)) = self.resolve_function(function) {
+					let args = if params.len() == args.len() {
+						args.iter().zip(params).map(|(x, t)| self.typecheck(x, t)).collect()
+					} else {
+						let error_message = format!("expected {} arguments but {} were given", params.len(), args.len());
+						self.error(TypeError, loc, error_message);
+						args.iter()
+							.map(|arg| {
+								let typ = self.types.insert(PossiblyUnspecifiedType::Unknown);
+								self.typecheck(arg, typ)
+							})
+							.collect()
+					};
+					(FnCall(path, args), result_type)
 				} else {
 					if !matches!(function.as_ref(), "print" | "println" | "eprint" | "eprintln") {
 						self.error(NameError, loc, "function not found in this scope".into());
@@ -700,14 +712,14 @@ impl<'a> BodyTypechecker<'a> {
 		Block { stmts, result }
 	}
 
-	fn resolve_function(&mut self, function: &str) -> Result<(Vec<TypeId>, TypeId), ()> {
+	fn resolve_function(&mut self, function: &str) -> Result<(Str, Vec<TypeId>, TypeId), ()> {
 		let (module, fname) =
 			if let Some(i) = function.find('.') { (&function[..i], &function[i + 1..]) } else { (&self.module[..], function) };
 		let Some(f) = &self.program.modules[module].ast.functions.get(fname) else { return Err(()) };
 		let params =
 			f.params.iter().map(|x| self.types.insert_specified(&self.program.resolve_typename(module, &x.typ))).collect();
 		let result = self.types.insert_specified(&self.program.resolve_typename(module, &f.result));
-		Ok((params, result))
+		Ok((format!("{}.{}", module, fname).into(), params, result))
 	}
 
 	fn resolve_method(&mut self, receiver: TypeId, method: &str) -> Result<Vec<TypeId>, ()> {
