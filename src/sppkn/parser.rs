@@ -1,6 +1,8 @@
 #![allow(unused)]
 
 use std::collections::HashMap;
+use std::fmt::format;
+use std::process::exit;
 use std::rc::Rc;
 
 use indexmap::IndexMap;
@@ -61,7 +63,7 @@ pub struct Typename {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum TypenameKind {
-	Tuple(Vec<VarDef>),
+	Tuple(Vec<Typename>),
 	Array(Box<Typename>),
 	Name(Str),
 	Unknown,
@@ -79,6 +81,7 @@ pub enum ExprKind {
 	String(Str),
 	Integer(Str),
 	Identifier(Str),
+	Tuple(Vec<Expr>),
 	Assignment(Str, Rc<Expr>),
 	Block(Indented),
 	While(Rc<Expr>, Rc<Expr>),
@@ -87,6 +90,7 @@ pub enum ExprKind {
 	FnCall(Str, Vec<Expr>),
 	Return(Rc<Expr>),
 	Unreachable,
+	Nothing,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -111,6 +115,7 @@ struct Parser<'src> {
 }
 
 const DEBUG_LOGGING: bool = false;
+const DIE_ON_FIRST_ERROR_REPORT: bool = false;
 
 impl<'s> Parser<'s> {
 	fn new(source: &'s str) -> Self {
@@ -135,9 +140,14 @@ impl<'s> Parser<'s> {
 						self.error(position + 1, "Expected module name");
 					}
 				}
-				Let => {
-					// parse global
-					todo!()
+				Let | Mut => {
+					if let Ok((mut definiton, pos)) = self.parse_definition(position) {
+						definiton.mutable = self.tokens[position].kind == Mut;
+						globals.insert(definiton.name.clone(), definiton);
+						position = pos;
+					} else {
+						position = self.skip_line(position);
+					}
 				}
 				Fun => {
 					if let Ok((function, pos)) = self.parse_function(position) {
@@ -150,7 +160,7 @@ impl<'s> Parser<'s> {
 				Linend => position += 1,
 				Indent => {
 					self.error(position, "Unexpected indent");
-					position = self.skip_block(position + 1);
+					position = self.skip_current_block(position + 1);
 				}
 				_ => {
 					self.error(position, "Unexpected unfunny code");
@@ -163,6 +173,7 @@ impl<'s> Parser<'s> {
 	}
 
 	fn parse_function(&mut self, position: usize) -> Result<(FunDef, usize), ()> {
+		self.log("function", position);
 		use TokenKind::*;
 		let mut params: Vec<FunParameter> = vec![];
 		let pos = self.parse_token(position, Fun)?;
@@ -180,15 +191,38 @@ impl<'s> Parser<'s> {
 		} else {
 			(Typename { location: self.tokens[pos].span(), kind: TypenameKind::Void }, pos)
 		};
+		let pos = self.try_parse_token(pos, Linend).unwrap_or(pos);
 		let (body, pos) = self.parse_expr(pos)?;
 		let function = FunDef { location: position, name, params, result, body };
 		Ok((function, pos))
 	}
 
 	fn parse_expr(&mut self, position: usize) -> Result<(Rc<Expr>, usize), ()> {
-		if DEBUG_LOGGING {
-			eprintln!("  parse_expr({:?})", position);
+		self.log("expression", position);
+		use TokenKind::*;
+		match self.tokens[position].kind {
+			If => {
+				let (condition, pos) = self.parse_expr(position + 1)?;
+				let pos = self.try_parse_token(pos, Linend).unwrap_or(pos);
+				let (then, pos) = self.parse_expr(pos)?;
+				let (els, pos) = if let Ok(pos) = self.try_parse_token(pos, Else) {
+					self.parse_expr(pos)?
+				} else {
+					let expr = Expr { location: then.location, kind: ExprKind::Nothing };
+					(expr.into(), pos)
+				};
+				let expr = Expr {
+					location: (self.tokens[position].span().0, self.tokens[pos - 1].span().1),
+					kind: ExprKind::If(condition, then, els),
+				};
+				return Ok((expr.into(), pos));
+			}
+			_ => return self.parse_arithmetic(position),
 		}
+	}
+
+	fn parse_arithmetic(&mut self, position: usize) -> Result<(Rc<Expr>, usize), ()> {
+		self.log("arithmetic", position);
 		fn precedence(operator: TokenKind) -> u32 {
 			match operator {
 				Dot => 110,
@@ -233,7 +267,16 @@ impl<'s> Parser<'s> {
 					LessEqual => "le",
 					And => todo!(),
 					Or => todo!(),
-					Equal => todo!(),
+					Equal => {
+						let name = match &x.kind {
+							ExprKind::Identifier(name) => name,
+							_ => todo!(),
+						};
+						let kind = ExprKind::Assignment(name.clone(), y);
+						let z = Expr { location: x.location, kind };
+						args.push(Rc::new(z));
+						continue;
+					}
 					LeftParen => {
 						let kind = match &x.kind {
 							ExprKind::Identifier(name) => ExprKind::FnCall(name.clone(), vec![(*y).clone()]),
@@ -266,15 +309,25 @@ impl<'s> Parser<'s> {
 	}
 
 	fn parse_unary(&mut self, position: usize) -> Result<(Rc<Expr>, usize), ()> {
-		if DEBUG_LOGGING {
-			eprintln!("  parse_unary({:?})", self.tokens[position]);
-		}
+		self.log("unary", position);
 		use TokenKind::*;
 		match self.tokens[position].kind {
 			LeftParen => {
 				let (expr, pos) = self.parse_expr(position + 1)?;
-				let pos = self.parse_token(pos, RightParen)?;
-				return Ok((expr, pos));
+				if let Ok(pos) = self.try_parse_token(pos, RightParen) {
+					return Ok((expr, pos));
+				}
+				let mut fields = vec![(*expr).clone()];
+				let mut field_pos = self.try_parse_token(pos, Comma).unwrap_or(pos);
+				while !matches!(self.tokens[field_pos].kind, RightParen | Linend) {
+					let (expr, pos) = self.parse_expr(field_pos)?;
+					fields.push((*expr).clone());
+					field_pos = self.try_parse_token(pos, Comma).unwrap_or(pos);
+				}
+				let pos = self.parse_token(field_pos, RightParen).unwrap_or(field_pos);
+				let expr =
+					Expr { location: (self.tokens[position].span().0, self.tokens[pos].span().1), kind: ExprKind::Tuple(fields) };
+				return Ok((expr.into(), pos));
 			}
 			LeftBrace => todo!(),   // Map
 			LeftBracket => todo!(), // Array
@@ -337,6 +390,7 @@ impl<'s> Parser<'s> {
 	}
 
 	fn parse_typename(&mut self, position: usize) -> Result<(Typename, usize), ()> {
+		self.log("typename", position);
 		use TokenKind::*;
 		match self.tokens[position].kind {
 			Identifier => {
@@ -352,16 +406,16 @@ impl<'s> Parser<'s> {
 					};
 					return Ok((typ, position + 2));
 				}
-				let mut fields: Vec<VarDef> = vec![];
+				let mut fields: Vec<Typename> = vec![];
 				let mut variable_pos = position + 1;
 				while self.tokens[variable_pos].kind != RightParen {
-					let (field, pos) = self.parse_field(variable_pos)?;
+					let (field, pos) = self.parse_typename(variable_pos)?;
 					fields.push(field);
-					variable_pos = self.parse_token(pos, Comma).unwrap_or(pos);
+					variable_pos = self.try_parse_token(pos, Comma).unwrap_or(pos);
 				}
 				let end_position = variable_pos + 1;
 				let typ = Typename {
-					location: (self.tokens[position].span().0, self.tokens[end_position - 1].span().1),
+					location: (self.tokens[position].span().0, self.tokens[variable_pos].span().1),
 					kind: TypenameKind::Tuple(fields),
 				};
 				Ok((typ, end_position))
@@ -383,9 +437,8 @@ impl<'s> Parser<'s> {
 	}
 
 	fn parse_block(&mut self, mut position: usize) -> (Indented, usize) {
-		if DEBUG_LOGGING {
-			eprintln!("parse_block({:?})", position);
-		}
+		use TokenKind::*;
+		self.log("block", position);
 		let mut stmts = Vec::new();
 		let mut location = self.tokens[position].span();
 		while self.tokens[position].kind != TokenKind::Dedent {
@@ -393,18 +446,20 @@ impl<'s> Parser<'s> {
 			location = (self.tokens[position].span().0, self.tokens[pos].span().1);
 			position = pos;
 			stmts.push(stmt);
-			if !matches!(self.tokens[pos].kind, TokenKind::Linend | TokenKind::Indent) {
-				self.error(position, "Expected end of line");
-				position = self.skip_line(position);
-			}
+			// if !matches!(self.tokens[pos].kind, Indent | Linend | Dedent) {
+			// 	self.error(position, "expected end of line");
+			// 	position = self.skip_line(position);
+			// }
 			while self.tokens[position].kind == TokenKind::Linend {
 				position += 1;
 			}
 		}
+		self.log("block end", position);
 		(Indented { stmts, location }, position + 1)
 	}
 
 	fn parse_field(&mut self, position: usize) -> Result<(VarDef, usize), ()> {
+		self.log("field", position);
 		use TokenKind::*;
 		let (name, pos) = if self.tokens[position].kind == Identifier {
 			let (name, pos) = self.parse_identifier(position)?;
@@ -422,13 +477,35 @@ impl<'s> Parser<'s> {
 		Ok((VarDef { location: self.tokens[position].span(), name, mutable: true, typename: typ, value: expr }, pos))
 	}
 
-	fn parse_stmt(&mut self, position: usize) -> (Stmt, usize) {
-		if DEBUG_LOGGING {
-			eprintln!(" parse_stmt({:?})", position);
+	fn parse_definition(&mut self, position: usize) -> Result<(VarDef, usize), ()> {
+		self.log("variable definition", position);
+		use TokenKind::*;
+		if !matches!(self.tokens[position].kind, Mut | Let) {
+			self.error(position, "expected 'let' or 'mut' keyword");
+			return Err(());
 		}
+		let mutable = self.tokens[position].kind == Mut;
+		let (name, pos) = self.parse_identifier(position + 1)?;
+		let (typename, pos) = if self.tokens[pos].kind == Colon {
+			self.parse_typename(pos + 1)?
+		} else {
+			(Typename { location: self.tokens[position + 1].span(), kind: TypenameKind::Unknown }, pos)
+		};
+		let (value, pos) = if self.tokens[pos].kind == Equal {
+			let (expr, pos) = self.parse_expr(pos + 1)?;
+			(Some(expr.into()), pos)
+		} else {
+			(None, pos)
+		};
+		let definition = VarDef { location: self.tokens[position].span(), name, mutable, typename, value };
+		Ok((definition, pos))
+	}
+
+	fn parse_stmt(&mut self, position: usize) -> (Stmt, usize) {
+		self.log("statement", position);
 		use TokenKind::*;
 		if matches!(self.tokens[position].kind, Let | Mut) {
-			let id_pos = position;
+			let id_pos = position + 1;
 			let Ok((name, pos)) = self.parse_identifier(id_pos) else {
 				return (
 					Stmt::Expression(Expr { location: self.tokens[id_pos].span(), kind: ExprKind::Unreachable }),
@@ -466,6 +543,7 @@ impl<'s> Parser<'s> {
 	}
 
 	fn parse_arguments(&mut self, position: usize) -> (Vec<Expr>, usize) {
+		self.log("function arguments", position);
 		use TokenKind::*;
 		if self.tokens[position].kind != LeftParen {
 			self.error(position, "expected '('");
@@ -545,9 +623,10 @@ impl<'s> Parser<'s> {
 	}
 
 	fn skip_line(&mut self, mut position: usize) -> usize {
-		while self.tokens[position].kind != TokenKind::Linend {
-			if self.tokens[position].kind == TokenKind::Indent {
-				position = self.skip_block(position + 1);
+		use TokenKind::*;
+		while !matches!(self.tokens[position].kind, Linend | Dedent) {
+			if self.tokens[position].kind == Indent {
+				position = self.skip_current_block(position + 1);
 			} else {
 				position += 1
 			}
@@ -555,7 +634,7 @@ impl<'s> Parser<'s> {
 		position + 1
 	}
 
-	fn skip_block(&mut self, mut position: usize) -> usize {
+	fn skip_current_block(&mut self, mut position: usize) -> usize {
 		use TokenKind::*;
 		let mut indent = 1;
 		while indent > 0 {
@@ -572,10 +651,29 @@ impl<'s> Parser<'s> {
 	fn error(&mut self, position: usize, message: &'static str) {
 		if DEBUG_LOGGING {
 			eprintln!("SYNTAX ERROR: {:?} <- {:?}", self.tokens[position], message);
+			if DIE_ON_FIRST_ERROR_REPORT {
+				exit(1);
+			}
 		}
 		let location = self.tokens[position].span();
 		let error = SyntaxError::new(location, message);
 		self.errors.push(error);
+	}
+
+	fn prettify(&self, position: usize) -> String {
+		let position = self.tokens[position].position as usize;
+		let (before, after) = self.source.split_at(position);
+		let line_no = before.split('\n').count().max(1);
+		let before = before.split('\n').last().unwrap_or(" ");
+		let after = after.split('\n').next().unwrap_or(" ");
+		format!("\x1b[90m{:3}\x1b[0m {}\x1b[91m▶\x1b[0m{}", line_no, before, after).replace("\t", "     ")
+	}
+
+	fn log(&self, msg: &str, position: usize) {
+		if DEBUG_LOGGING {
+			let line = self.prettify(position);
+			eprintln!("{} \x1b[90m# {} /{:?}\x1b[0m", line, msg, self.tokens[position].kind);
+		}
 	}
 }
 

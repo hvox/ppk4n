@@ -193,7 +193,7 @@ impl<'s> Lexer<'s> {
 							self.tokens.push(Token::new(start + 1, current_indent, Linend));
 						}
 						while current_indent > self.indentation {
-							self.tokens.push(Token::new(start + 1, current_indent, Indent));
+							self.tokens.push(Token::new(start + current_indent, 1, Indent));
 							self.indentation += 1;
 						}
 						while current_indent < self.indentation {

@@ -47,17 +47,17 @@ pub struct Module {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Function {
-	module: Str,
-	name: Str,
-	parameters: Vec<(Str, Type)>,
-	result: Type,
-	body: Body,
+	pub module: Str,
+	pub name: Str,
+	pub parameters: Vec<(Str, Type)>,
+	pub result: Type,
+	pub body: Body,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Body {
-	types: Types,
-	value: Instr,
+	pub types: Types,
+	pub value: Instr,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -71,6 +71,7 @@ pub enum InstrKind {
 	String(Str),
 	Integer(Str),
 	Identifier(Str),
+	Tuple(Vec<Instr>),
 	SetLocal(Str, Rc<Instr>),
 	GetLocal(Str),
 	Block(Rc<Block>),
@@ -91,7 +92,7 @@ pub struct Block {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum Type {
-	Tuple(Vec<(Str, Type, Option<Instr>)>),
+	Tuple(Vec<Type>),
 	Array(Rc<Type>),
 	Name(Str),
 	Void,
@@ -101,7 +102,7 @@ pub enum Type {
 // Something like InferedType.
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum PossiblyUnspecifiedType {
-	// Tuple(Vec<(Str, TypeId, Option<Instr>)>),
+	Tuple(Vec<TypeId>),
 	Array(TypeId),
 	Name(Str),
 	Void,
@@ -243,12 +244,9 @@ impl Program {
 		use TypenameKind::*;
 		match &typename.kind {
 			Tuple(field_names) => {
-				let fields = vec![];
-				for def in field_names {
-					let name = def.name.clone();
-					let typ = self.resolve_typename(module, &def.typename);
-					let body = todo!();
-					fields.push((name, typ, body));
+				let mut fields = vec![];
+				for field in field_names {
+					fields.push(self.resolve_typename(module, field));
 				}
 				Type::Tuple(fields)
 			}
@@ -287,7 +285,7 @@ impl Types {
 	fn insert_specified(&mut self, typ: &Type) -> TypeId {
 		use PossiblyUnspecifiedType::*;
 		let typ = match typ {
-			Type::Tuple(items) => todo!(),
+			Type::Tuple(fields) => Tuple(fields.iter().map(|x| self.insert_specified(x)).collect()),
 			Type::Array(item_type) => Array(self.insert_specified(item_type)),
 			Type::Name(name) => match &name[..] {
 				"bool" => return self.bool,
@@ -335,6 +333,12 @@ impl Types {
 			(UnkInt, Uint(x)) => Uint(x),
 			(Float(x), UnkFloat) => Float(x),
 			(UnkFloat, Float(x)) => Float(x),
+			(Tuple(xs), Tuple(ys)) if xs.len() == ys.len() => {
+				for (x, y) in xs.iter().zip(&ys) {
+					self.unify(*x, *y).map_err(|_| (Tuple(xs.clone()), Tuple(ys.clone())))?;
+				}
+				Tuple(xs)
+			}
 			(x, y) => return Err((x, y)),
 		};
 		let (u, v) = (u_hndl.min(v_hndl), v_hndl.max(u_hndl));
@@ -571,6 +575,18 @@ impl<'a> BodyTypechecker<'a> {
 			ExprKind::String(string) => (String(string.clone()), self.types.string),
 			ExprKind::Integer(integer) => (Integer(integer.clone()), self.types.insert(PossiblyUnspecifiedType::UnkInt)),
 			ExprKind::Identifier(name) => (GetLocal(name.clone()), self.vartype(loc, &name)),
+			ExprKind::Tuple(fields) => {
+				let mut instrs = vec![];
+				let mut types = vec![];
+				for expr in fields {
+					let typ = self.types.insert(PossiblyUnspecifiedType::Unknown);
+					let instr = self.typecheck(expr, typ);
+					instrs.push(instr);
+					types.push(typ);
+				}
+				let tuple_type = self.types.insert(PossiblyUnspecifiedType::Tuple(types));
+				(Tuple(instrs), tuple_type)
+			}
 			ExprKind::Assignment(name, expr) => {
 				let typ = self.vartype(loc, &name);
 				let value = self.typecheck(expr, typ);
@@ -646,7 +662,7 @@ impl<'a> BodyTypechecker<'a> {
 					};
 					(FnCall(path, args), result_type)
 				} else {
-					if !matches!(function.as_ref(), "print" | "println" | "eprint" | "eprintln") {
+					if !matches!(function.as_ref(), "print" | "println" | "eprint" | "eprintln" | "memory_copy") {
 						self.error(NameError, loc, "function not found in this scope".into());
 					}
 					let args = args
@@ -661,6 +677,7 @@ impl<'a> BodyTypechecker<'a> {
 			}
 			ExprKind::Return(value) => (Return(self.typecheck(value, self.result).into()), typ),
 			ExprKind::Unreachable => (Unreachable, typ),
+			ExprKind::Nothing => (NoOp, self.types.void),
 		};
 		if typ != actual_type {
 			self.unify(expr.location, typ, actual_type);
@@ -678,6 +695,7 @@ impl<'a> BodyTypechecker<'a> {
 				Stmt::DefLocal(vardef) => {
 					let name = vardef.name.clone();
 					let typ = self.resolve_typename(&vardef.typename);
+					self.locals.push((name.clone(), typ));
 					let expr = self.typecheck(&vardef.value.clone().unwrap(), typ);
 					stmts.push((Some((name, vardef.mutable)), expr));
 				}
@@ -759,7 +777,8 @@ impl<'a> BodyTypechecker<'a> {
 			}
 		}
 
-		if let Some((global_typ, _)) = self.program.globals.get(name) {
+		let path = if name.contains('.') { name } else { &format!("{}.{}", self.module, name) };
+		if let Some((global_typ, _)) = self.program.globals.get(path) {
 			return self.types.insert_specified(global_typ);
 		}
 
@@ -776,12 +795,10 @@ impl<'a> BodyTypechecker<'a> {
 		use PossiblyUnspecifiedType::*;
 		let typ = match &typename.kind {
 			TypenameKind::Tuple(field_names) => {
-				let fields = vec![];
-				for def in field_names {
-					let name = def.name.clone();
-					let typ = self.resolve_typename(&def.typename);
-					let body = todo!();
-					fields.push((name, typ, body));
+				let mut fields = vec![];
+				for field in field_names {
+					let typ = self.resolve_typename(&field);
+					fields.push(typ);
 				}
 				// PossiblyUnspecifiedType::Tuple(fields)
 				todo!()
@@ -790,7 +807,10 @@ impl<'a> BodyTypechecker<'a> {
 				let item = self.resolve_typename(item);
 				PossiblyUnspecifiedType::Array(item.into())
 			}
-			TypenameKind::Name(name) => PossiblyUnspecifiedType::Name(name.clone()),
+			TypenameKind::Name(name) => {
+				let typ = self.program.resolve_typename(&self.module, typename);
+				return self.types.insert_specified(&typ);
+			}
 			TypenameKind::Unknown => PossiblyUnspecifiedType::Unknown,
 			TypenameKind::Void => PossiblyUnspecifiedType::Void,
 		};
