@@ -46,12 +46,52 @@ fn main() {
 			}
 		}
 		_ => {
-			// let source = fs::read_to_string(&args[1]).unwrap() + include_str!("ppkn/std.ppkn");
-			// let lir = ppkn::to_lir(&source).unwrap();
-			// let mut intrerpreter = ppkn::yalir_interpreter::Interpreter::new(&lir);
-			// intrerpreter.interpret("main").unwrap();
-			let source = fs::read_to_string(&args[1]).unwrap();
-			checked(&source, run(&source));
+			if USE_SPPKN_IMPLEMENTATION {
+				let path = PathBuf::from(&args[1]);
+				let source = fs::read_to_string(&path).unwrap();
+
+				use sppkn::loader;
+				let loader = loader::load(path.parent().unwrap().into(), "main".into(), source.clone().into());
+				if false {
+					for (name, module) in loader.modules {
+						println!("\t{:?} : {:?}", name, module);
+					}
+					println!("\nERRORS: {:?}", loader.errors);
+				}
+
+				let src_root = path.parent().unwrap();
+				let sources = HashMap::from([("TODO".into(), source.into())]);
+				let mut program = sppkn::hir::Program::new(src_root, sources);
+				if let Err(errors) = program.load_and_typecheck("TODO".into()) {
+					for error in errors {
+						let source = &program.sources[&error.module];
+						let (start, end) = error.cause_location;
+						let mut line_no = 1;
+						let mut line_start = 0;
+						for (i, _) in source.char_indices().filter(|(_, ch)| *ch == '\n') {
+							if i + 1 > start as _ {
+								break;
+							}
+							line_start = i + 1;
+							line_no += 1;
+						}
+						let column = start as usize + 1 - line_start;
+						let line = source[line_start..].lines().next().unwrap();
+						let path = error.module; // TODO
+						println!("{:?} at {}:{}:{}", error.kind, path, line_no, column);
+						println!("{}", line.replace("\t", " "));
+						println!("{}{} {}", " ".repeat(column - 1), "^".repeat((end - start) as _), error.message);
+					}
+					return;
+				};
+				println!("{:?}", program);
+			} else {
+				let source = fs::read_to_string(&args[1]).unwrap() + include_str!("ppkn/std.ppkn");
+				let lir = ppkn::to_lir(&source).unwrap();
+				let mut intrerpreter = ppkn::yalir_interpreter::Interpreter::new(&lir);
+				intrerpreter.interpret("main").unwrap();
+				// checked(&source, run(&source));
+			}
 		}
 	}
 }
