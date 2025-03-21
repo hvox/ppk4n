@@ -314,6 +314,7 @@ impl<'a, 'p> FunctionCompiler<'a, 'p> {
 						("u32", "rem") => code.push(Op::U32Rem(src)),
 						("u32", "shl") => code.push(Op::U32Shl(src)),
 						("u32", "shr") => code.push(Op::U32Shr(src)),
+						("str", "add") => code.push(Op::CallFunc(self.ctx.queue_function("std.str_add"))),
 						x => todo!("{:?}", x),
 					},
 					Type::Void => unreachable!(),

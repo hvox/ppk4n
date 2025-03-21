@@ -26,6 +26,7 @@ pub struct Program {
 	pub sources: HashMap<Str, Str>,
 	pub modules: HashMap<Str, Module>,
 
+	pub imports: HashMap<Str, FunctionSignature>,
 	pub types: HashMap<Str, NamedType>,
 	// TODO: Automatically create body based on Type
 	pub globals: HashMap<Str, (Type, Option<Body>)>,
@@ -33,8 +34,8 @@ pub struct Program {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
-pub struct NamedType {
-	methods: HashMap<Str, Function>,
+pub enum NamedType {
+	Foreign,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -52,6 +53,14 @@ pub struct Function {
 	pub parameters: Vec<(Str, Type)>,
 	pub result: Type,
 	pub body: Body,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct FunctionSignature {
+	pub module: Str,
+	pub name: Str,
+	pub parameters: Vec<(Str, Type)>,
+	pub result: Type,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -144,13 +153,14 @@ impl Program {
 		let modules = HashMap::new();
 		let globals = HashMap::new();
 		let functions = HashMap::new();
+		let imports = HashMap::new();
 		let types = HashMap::new();
 		let mut sources = sources;
 		if !sources.contains_key("std") {
 			let std_source = include_str!("std.ppkn");
 			sources.insert("std".into(), std_source.into());
 		}
-		let program = Self { poisoned: false, main, root, sources, modules, globals, functions, types };
+		let program = Self { poisoned: false, main, root, sources, modules, globals, functions, types, imports };
 		program
 	}
 
@@ -210,6 +220,17 @@ impl Program {
 		let ast = &self.modules[module_name].ast;
 		// let globals: HashMap<Str, &FunDef> = HashMap::new();
 		// let functions: HashMap<Str, &FunDef> = HashMap::new();
+		for typ in &ast.imported_types {
+			self.types.insert(typ.clone(), NamedType::Foreign);
+		}
+		for (fname, function) in &ast.imported_functions {
+			let name = function.name.clone();
+			let params: Vec<_> =
+				function.params.iter().map(|x| (x.name.clone(), self.resolve_typename(module_name, &x.typ))).collect();
+			let result = self.resolve_typename(module_name, &function.result);
+			let signature = FunctionSignature { module: module_name.into(), name, parameters: params, result };
+			self.imports.insert(fname.clone(), signature);
+		}
 		for (_, global) in &ast.globals {
 			let name = global.name.clone();
 			let typ = self.resolve_typename(module_name, &global.typename);
@@ -604,6 +625,9 @@ impl<'a> BodyTypechecker<'a> {
 				let (path, typ) = self.vartype(loc, name.clone());
 				(Identifier(path), typ)
 			}
+			ExprKind::Field(object, field_name) => {
+				todo!()
+			}
 			ExprKind::Tuple(fields) => {
 				let mut instrs = vec![];
 				let mut types = vec![];
@@ -815,7 +839,7 @@ impl<'a> BodyTypechecker<'a> {
 		self.errors.push(Error {
 			module: self.module.clone(),
 			cause_location: location,
-			message: format!("name {:?} is not defined", name),
+			message: format!("not defined in this scope"),
 			kind: PpknErrorKind::NameError,
 		});
 		(path, self.types.insert(PossiblyUnspecifiedType::Unknown))

@@ -6,6 +6,7 @@ use std::process::exit;
 use std::rc::Rc;
 
 use indexmap::IndexMap;
+use indexmap::IndexSet;
 
 use super::lexer::Token;
 use super::lexer::TokenKind;
@@ -22,6 +23,8 @@ pub struct Ast {
 	pub globals: IndexMap<Str, VarDef>,
 	pub dependencies: Vec<Dependency>,
 	pub functions: IndexMap<Str, FunDef>,
+	pub imported_types: IndexSet<Str>,
+	pub imported_functions: IndexMap<Str, FunSignature>,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -46,6 +49,14 @@ pub struct FunDef {
 	pub params: Vec<FunParameter>,
 	pub result: Typename,
 	pub body: Rc<Expr>,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct FunSignature {
+	pub location: (u32, u32),
+	pub name: Str,
+	pub params: Vec<FunParameter>,
+	pub result: Typename,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -89,6 +100,7 @@ pub enum ExprKind {
 	MethodCall(Rc<Expr>, Str, Vec<Expr>),
 	FnCall(Str, Vec<Expr>),
 	Return(Rc<Expr>),
+	Field(Rc<Expr>, Str),
 	Unreachable,
 	Nothing,
 }
@@ -127,11 +139,34 @@ impl<'s> Parser<'s> {
 		let mut dependencies: Vec<Dependency> = vec![];
 		let mut functions: IndexMap<Str, FunDef> = IndexMap::new();
 		let mut globals: IndexMap<Rc<str>, VarDef> = IndexMap::new();
+		let mut imported_functions = IndexMap::new();
+		let mut imported_types = IndexSet::new();
 		let mut position = 0;
 
 		use TokenKind::*;
 		while self.tokens[position].kind != Eof {
 			match self.tokens[position].kind {
+				Identifier => {
+					let (keyword, pos) = self.parse_identifier_soft(position);
+					match keyword.as_ref() {
+						"import" => {
+							let (name, pos) = self.parse_identifier_soft(pos);
+							if let Ok(pos) = self.try_parse_token(pos, Dot) {
+								let (signature, pos) = self.parse_imported_function_signature(pos);
+								let path = format!("{}.{}", name, signature.name).into();
+								imported_functions.insert(path, signature);
+								position = self.expect_end_of_line(pos);
+							} else {
+								imported_types.insert(name);
+								position = self.expect_end_of_line(pos);
+							}
+						}
+						_ => {
+							self.error(position, "Unexpected identifier");
+							position = self.skip_line(pos);
+						}
+					}
+				}
 				Use => {
 					if let Ok((name, pos)) = self.try_parse_identifier(position + 1) {
 						dependencies.push(Dependency { location: self.tokens[position + 1].span(), name });
@@ -168,8 +203,57 @@ impl<'s> Parser<'s> {
 				}
 			}
 		}
-		let ast = Ast { location: "main".into(), globals, dependencies, functions };
+		let ast = Ast { location: "main".into(), globals, dependencies, functions, imported_types, imported_functions };
 		(ast, self.errors)
+	}
+
+	fn parse_imported_function_signature(&mut self, position: usize) -> (FunSignature, usize) {
+		self.log("imported function signature", position);
+		use TokenKind::*;
+		let (name, pos) = self.parse_identifier_soft(position);
+		let mut params: Vec<FunParameter> = vec![];
+		let mut param_pos = self.parse_token_soft(pos, LeftParen);
+		while !matches!(self.tokens[param_pos].kind, RightParen | Linend | Dedent | Indent | RightArrow) {
+			let (typ, pos) = self
+				.parse_typename(param_pos)
+				.unwrap_or_else(|_| (Typename { location: self.tokens[param_pos].span(), kind: TypenameKind::Unknown }, pos));
+			params.push(FunParameter { location: param_pos, name: "".into(), typ });
+			param_pos = self.try_parse_token(pos, Comma).unwrap_or(pos).max(param_pos + 1);
+		}
+		let pos = self.parse_token_soft(param_pos, RightParen);
+		let (result, pos) = if let Ok(pos) = self.try_parse_token(pos, RightArrow) {
+			self.parse_typename(pos)
+				.unwrap_or_else(|_| (Typename { location: self.tokens[pos].span(), kind: TypenameKind::Void }, pos))
+		} else {
+			(Typename { location: self.tokens[pos].span(), kind: TypenameKind::Void }, pos)
+		};
+		let location = self.tokens[position].span();
+		let signature = FunSignature { location, name, params, result };
+		(signature, pos)
+	}
+
+	fn parse_function_signature(&mut self, position: usize) -> (FunSignature, usize) {
+		self.log("function signature", position);
+		use TokenKind::*;
+		let (name, pos) = self.parse_identifier_soft(position);
+		let mut params: Vec<FunParameter> = vec![];
+		let mut param_pos = self.parse_token_soft(pos, LeftParen);
+		while let Ok((name, pos)) = self.try_parse_identifier(param_pos) {
+			let pos = self.parse_token_soft(pos, Colon);
+			let (typ, pos) = self.parse_typename(pos).unwrap_or_else(|_| todo!());
+			params.push(FunParameter { location: param_pos, name, typ });
+			param_pos = self.try_parse_token(pos, Comma).unwrap_or(pos);
+		}
+		let pos = self.parse_token_soft(param_pos, RightParen);
+		let (result, pos) = if let Ok(pos) = self.try_parse_token(pos, RightArrow) {
+			self.parse_typename(pos)
+				.unwrap_or_else(|_| (Typename { location: self.tokens[pos].span(), kind: TypenameKind::Void }, pos))
+		} else {
+			(Typename { location: self.tokens[pos].span(), kind: TypenameKind::Void }, pos)
+		};
+		let location = self.tokens[position].span();
+		let signature = FunSignature { location, name, params, result };
+		(signature, pos)
 	}
 
 	fn parse_function(&mut self, position: usize) -> Result<(FunDef, usize), ()> {
@@ -253,7 +337,29 @@ impl<'s> Parser<'s> {
 				let y = args.pop().unwrap();
 				let x = args.pop().unwrap();
 				let method_name = match op.kind {
-					Dot => todo!(), // New expr kind?
+					Dot => {
+						match &y.kind {
+							ExprKind::Identifier(name) => {
+								let location = (x.location.0, y.location.1);
+								let kind = ExprKind::Field(x, name.clone());
+								let expr = Expr { location, kind };
+								args.push(expr.into());
+								continue;
+							}
+							ExprKind::FnCall(name, fn_args) => {
+								let location = (x.location.0, y.location.1);
+								let kind = ExprKind::MethodCall(x, name.clone(), fn_args.clone());
+								let expr = Expr { location, kind };
+								args.push(expr.into());
+								continue;
+							}
+							_ => {
+								self.error_loc(op.span(), "invalid field access");
+								args.push(x);
+								continue;
+							}
+						};
+					}
 					Minus => "sub",
 					Plus => "add",
 					Slash => "div",
@@ -588,6 +694,20 @@ impl<'s> Parser<'s> {
 		}
 	}
 
+	fn parse_token_soft(&mut self, position: usize, token: TokenKind) -> usize {
+		use TokenKind::*;
+		if self.tokens[position].kind == token {
+			position + 1
+		} else {
+			let error_msg = match token {
+				RightParen => "expected ')'",
+				_ => "invalid syntax",
+			};
+			self.error(position, error_msg);
+			position
+		}
+	}
+
 	fn try_parse_identifier(&mut self, mut position: usize) -> Result<(Str, usize), ()> {
 		let token = self.tokens[position];
 		if token.kind == TokenKind::Identifier {
@@ -602,6 +722,21 @@ impl<'s> Parser<'s> {
 
 	fn parse_identifier(&mut self, position: usize) -> Result<(Str, usize), ()> {
 		self.try_parse_identifier(position).map_err(|_| self.error(position, "Expected an identifier"))
+	}
+
+	fn parse_identifier_soft(&mut self, position: usize) -> (Str, usize) {
+		self.parse_identifier(position).unwrap_or_else(|_| ("".into(), position))
+	}
+
+	fn parse_soft_keyword(&mut self, position: usize, keyword: &str) -> usize {
+		let Ok((word, pos)) = self.try_parse_identifier(position) else {
+			self.error(position, format!("expected keyword '{:?}", keyword).leak());
+			return position;
+		};
+		if word.as_ref() != keyword {
+			self.error(position, format!("expected keyword '{:?}", keyword).leak());
+		}
+		return pos;
 	}
 
 	fn parse_integer(&mut self, mut position: usize) -> (Str, usize) {
@@ -627,6 +762,14 @@ impl<'s> Parser<'s> {
 		}
 		result.pop();
 		result.into()
+	}
+
+	fn expect_end_of_line(&mut self, position: usize) -> usize {
+		use TokenKind::*;
+		if self.tokens[position].kind != Linend {
+			self.error(position, "expected end of line");
+		}
+		return self.skip_line(position);
 	}
 
 	fn skip_line(&mut self, mut position: usize) -> usize {
@@ -656,13 +799,16 @@ impl<'s> Parser<'s> {
 	}
 
 	fn error(&mut self, position: usize, message: &'static str) {
+		self.error_loc(self.tokens[position].span(), message);
+	}
+
+	fn error_loc(&mut self, location: (u32, u32), message: &'static str) {
 		if DEBUG_LOGGING {
-			eprintln!("SYNTAX ERROR: {:?} <- {:?}", self.tokens[position], message);
+			eprintln!("SYNTAX ERROR: {:?}", message);
 			if DIE_ON_FIRST_ERROR_REPORT {
 				exit(1);
 			}
 		}
-		let location = self.tokens[position].span();
 		let error = SyntaxError::new(location, message);
 		self.errors.push(error);
 	}
