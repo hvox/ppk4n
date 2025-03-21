@@ -305,7 +305,27 @@ impl<'a, 'p> FunctionCompiler<'a, 'p> {
 				self.locals.reset_shadowed(shadowed);
 			}
 			While(instr, instr1) => todo!(),
-			If(instr, instr1, instr2) => todo!(),
+			If(condition, then, otherwise) => {
+				self.compile_instr(condition, code);
+				let typ = &self.function.body.types.realize(instr.typ);
+				let valuetype = self.ctx.process_type(typ);
+				let blocktype = match valuetype.len() {
+					0 => BlockType::Void,
+					1 => BlockType::ValueType(valuetype[0]),
+					_ => todo!(),
+				};
+				let mut then_code = vec![];
+				self.compile_instr(then, &mut then_code);
+				code.push(Op::IfThen(blocktype, then_code.len()));
+				code.extend(then_code);
+				if otherwise.kind != InstrKind::NoOp {
+					let mut else_code = vec![];
+					self.compile_instr(then, &mut else_code);
+					code.push(Op::Else(else_code.len()));
+					code.extend(else_code);
+				}
+				code.push(Op::End);
+			}
 			MethodCall(receiver, method, args) => {
 				let src = instr.location as usize;
 				let typ = self.function.body.types.realize(receiver.typ);
