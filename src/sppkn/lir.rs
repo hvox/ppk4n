@@ -305,7 +305,7 @@ impl<'a, 'p> FunctionCompiler<'a, 'p> {
 			If(instr, instr1, instr2) => todo!(),
 			MethodCall(receiver, method, args) => {
 				let src = instr.location as usize;
-				let typ = self.function.body.types.realize(instr.typ);
+				let typ = self.function.body.types.realize(receiver.typ);
 				self.compile_instr(&receiver, code);
 				args.iter().for_each(|x| self.compile_instr(x, code));
 				match &typ {
