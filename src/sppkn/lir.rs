@@ -11,9 +11,9 @@ use super::hir::*;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Bytecode {
-	pub types: IndexSet<FuncType>,
-	pub imports: IndexSet<Import>,
 	pub sources: HashMap<Str, Str>,
+	pub types: IndexSet<FuncType>,
+	pub imports: IndexMap<Str, Import>,
 	pub globals: IndexMap<Str, GlobalVariable>,
 	pub functions: IndexMap<Str, Func>,
 	pub data: Vec<u8>,
@@ -50,6 +50,7 @@ pub struct GlobalVariable {
 pub enum BlockType {
 	ValueType(ValueType),
 	TypeIndex(usize),
+	Void,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Copy)]
@@ -92,17 +93,19 @@ impl<'a> ProgramCompiler<'a> {
 	fn new(program: &'a Program) -> Self {
 		assert!(!program.is_poisoned());
 		let main = program.main.to_string() + ":main";
-		let queue = VecDeque::from([main.into()]);
+		let queue = VecDeque::new();
 		let lir = Bytecode {
 			types: IndexSet::new(),
-			imports: IndexSet::new(),
+			imports: IndexMap::new(),
 			sources: program.sources.clone(),
 			globals: IndexMap::new(),
 			functions: IndexMap::new(),
 			data: Vec::new(),
 		};
 		// program.functions.iter().for_each(|(f, _)| eprintln!("{}", f));
-		ProgramCompiler { program, lir, queue, globals: Variables::default() }
+		let mut compiler = ProgramCompiler { program, lir, queue, globals: Variables::default() };
+		compiler.queue_function(&main);
+		compiler
 	}
 
 	fn generate_lir(mut self) -> Bytecode {
@@ -114,11 +117,18 @@ impl<'a> ProgramCompiler<'a> {
 	}
 
 	fn process_function(&mut self, fname: Str) {
-		if let Some(function) = self.program.functions.get(&fname) {
-			let bytecode = FunctionCompiler::new(self, function).compile();
-			self.lir.functions.insert(fname, bytecode);
-		} else {
-			let import = &self.program.imports[&fname];
+		let function = &self.program.functions[&fname];
+		let bytecode = FunctionCompiler::new(self, function).compile();
+		self.lir.functions.insert(fname, bytecode);
+	}
+
+	fn queue_function(&mut self, fname: &str) -> Op {
+		// println!("queue {}", fname);
+		if let Some(idx) = self.lir.functions.get_index_of(fname) {
+			return Op::CallFunc(idx);
+		} else if let Some(idx) = self.lir.imports.get_index_of(fname) {
+			return Op::CallImport(idx);
+		} else if let Some(import) = self.program.imports.get(fname) {
 			let mut parameters = vec![];
 			for (name, typ) in &import.parameters {
 				let typ = self.process_type(typ);
@@ -126,21 +136,14 @@ impl<'a> ProgramCompiler<'a> {
 			}
 			let signature = FuncType { parameters, results: self.process_type(&import.result) };
 			let (namespace, func_name) = fname.split_once(':').unwrap();
-			self.lir.imports.insert(Import { signature, namespace: namespace.into(), func_name: func_name.into() });
-		}
-	}
-
-	fn queue_function(&mut self, function: &str) -> usize {
-		if let Some(idx) = self.lir.functions.get_index_of(function) {
-			return idx;
-		}
-		match function {
-			_ => {
-				let function = Str::from(function);
-				self.queue.push_back(function.clone());
-				let (idx, _) = self.lir.functions.insert_full(function, Func::default());
-				idx
-			}
+			let import = Import { signature, namespace: namespace.into(), func_name: func_name.into() };
+			let (idx, _) = self.lir.imports.insert_full(fname.into(), import);
+			return Op::CallImport(idx);
+		} else {
+			let function = Str::from(fname);
+			self.queue.push_back(function.clone());
+			let (idx, _) = self.lir.functions.insert_full(function, Func::default());
+			return Op::CallFunc(idx);
 		}
 	}
 
@@ -255,7 +258,7 @@ impl<'a, 'p> FunctionCompiler<'a, 'p> {
 				let length = string.len() as u32;
 				self.ctx.lir.data.extend(string);
 				let clone = self.ctx.queue_function("std:clone_str");
-				code.extend([Op::U32Const(ptr), Op::U32Const(length), Op::CallFunc(clone)]);
+				code.extend([Op::U32Const(ptr), Op::U32Const(length), clone]);
 			}
 			Integer(source) => code.push(match self.function.body.types.realize(instr.typ) {
 				Type::Name(name) => match &name[..] {
@@ -319,6 +322,7 @@ impl<'a, 'p> FunctionCompiler<'a, 'p> {
 						("i32", "rem") => code.push(Op::I32Rem(src)),
 						("i32", "shl") => code.push(Op::I32Shl(src)),
 						("i32", "shr") => code.push(Op::I32Shr(src)),
+						("i32", "eq") => code.push(Op::I32Eq),
 						("u32", "add") => code.push(Op::U32Add(src)),
 						("u32", "sub") => code.push(Op::U32Sub(src)),
 						("u32", "mul") => code.push(Op::U32Mul(src)),
@@ -326,7 +330,8 @@ impl<'a, 'p> FunctionCompiler<'a, 'p> {
 						("u32", "rem") => code.push(Op::U32Rem(src)),
 						("u32", "shl") => code.push(Op::U32Shl(src)),
 						("u32", "shr") => code.push(Op::U32Shr(src)),
-						("str", "add") => code.push(Op::CallFunc(self.ctx.queue_function("std:str_add"))),
+						("u32", "eq") => code.push(Op::U32Eq),
+						("str", "add") => code.push(self.ctx.queue_function("std:str_add")),
 						x => todo!("{:?}", x),
 					},
 					Type::Void => unreachable!(),
@@ -344,7 +349,7 @@ impl<'a, 'p> FunctionCompiler<'a, 'p> {
 						self.compile_instr(instr, code);
 						self.compile_stringify(&typ, code);
 						if string_in_stack {
-							code.push(Op::CallFunc(self.ctx.queue_function("std:str_add")));
+							code.push(self.ctx.queue_function("std:str_add"));
 						} else {
 							string_in_stack = true;
 						}
@@ -352,11 +357,11 @@ impl<'a, 'p> FunctionCompiler<'a, 'p> {
 					if !string_in_stack {
 						self.compile_string("", code);
 					}
-					code.push(Op::CallFunc(self.ctx.queue_function("std:println")));
+					code.push(self.ctx.queue_function("std:println"));
 				}
 				_ => {
 					args.iter().for_each(|arg| self.compile_instr(arg, code));
-					code.push(Op::CallFunc(self.ctx.queue_function(name)))
+					code.push(self.ctx.queue_function(name))
 				}
 			},
 			Return(value) => {
@@ -386,7 +391,7 @@ impl<'a, 'p> FunctionCompiler<'a, 'p> {
 			Type::Array(_) => todo!(),
 			Type::Name(typ) => match &typ[..] {
 				"i8" | "u8" | "i16" | "u16" | "i32" | "u32" | "f32" | "i64" | "u64" | "f64" => code.push(Op::Drop),
-				"str" => code.push(Op::CallFunc(self.ctx.queue_function("std:free"))),
+				"str" => code.push(self.ctx.queue_function("std:free")),
 				_ => todo!(),
 			},
 			Type::Void => {}
@@ -399,7 +404,7 @@ impl<'a, 'p> FunctionCompiler<'a, 'p> {
 		let length = string.len() as u32;
 		self.ctx.lir.data.extend(string);
 		let clone = self.ctx.queue_function("std:clone_str");
-		code.extend([Op::U32Const(ptr), Op::U32Const(length), Op::CallFunc(clone)]);
+		code.extend([Op::U32Const(ptr), Op::U32Const(length), clone]);
 	}
 
 	fn find_local(&self, name: &str) -> Option<(usize, usize)> {
