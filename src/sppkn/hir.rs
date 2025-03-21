@@ -62,6 +62,7 @@ pub struct Body {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Instr {
+	pub location: u32,
 	pub typ: TypeId,
 	pub kind: InstrKind,
 }
@@ -72,7 +73,7 @@ pub enum InstrKind {
 	Integer(Str),
 	Identifier(Str),
 	Tuple(Vec<Instr>),
-	SetLocal(Str, Rc<Instr>),
+	Assignment(Str, Rc<Instr>),
 	GetLocal(Str),
 	Block(Rc<Block>),
 	While(Rc<Instr>, Rc<Instr>),
@@ -86,8 +87,8 @@ pub enum InstrKind {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Block {
-	stmts: Vec<(Option<(Str, bool)>, Instr)>,
-	result: Instr,
+	pub stmts: Vec<(Option<(Str, bool)>, Instr)>,
+	pub result: Instr,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -172,7 +173,7 @@ impl Program {
 	}
 
 	pub fn load(&mut self, name: Str) -> (Vec<Str>, Vec<Error>) {
-		let mut parse_queue = vec![(name, "".into(), (0, 0))];
+		let mut parse_queue = vec![(name.clone(), "".into(), (0, 0)), ("std".into(), name, (0, 0))];
 		let mut parsed = vec![];
 		let mut errors = vec![];
 		while let Some((name, dependent, location)) = parse_queue.pop() {
@@ -362,6 +363,26 @@ impl Types {
 			self.handles[id].set(leader);
 		}
 		leader
+	}
+
+	pub fn realize(&self, id: TypeId) -> Type {
+		use PossiblyUnspecifiedType::*;
+		let typ = &self[id];
+		match typ {
+			Tuple(fields) => Type::Tuple(fields.iter().map(|&x| self.realize(x)).collect()),
+			Array(_) => todo!(),
+			Name(_) => todo!(),
+			Void => Type::Void,
+			Bool => Type::Name("bool".into()),
+			Char => Type::Name("char".into()),
+			Str => Type::Name("str".into()),
+			Int(size) => Type::Name(format!("i{}", size).into()),
+			Uint(size) => Type::Name(format!("u{}", size).into()),
+			Float(size) => Type::Name(format!("f{}", size).into()),
+			Unknown => Type::Void,
+			UnkInt => Type::Name("i32".into()),
+			UnkFloat => Type::Name("f64".into()),
+		}
 	}
 }
 
@@ -579,7 +600,10 @@ impl<'a> BodyTypechecker<'a> {
 		let (kind, actual_type) = match &expr.kind {
 			ExprKind::String(string) => (String(string.clone()), self.types.string),
 			ExprKind::Integer(integer) => (Integer(integer.clone()), self.types.insert(PossiblyUnspecifiedType::UnkInt)),
-			ExprKind::Identifier(name) => (GetLocal(name.clone()), self.vartype(loc, &name)),
+			ExprKind::Identifier(name) => {
+				let (path, typ) = self.vartype(loc, name.clone());
+				(Identifier(path), typ)
+			}
 			ExprKind::Tuple(fields) => {
 				let mut instrs = vec![];
 				let mut types = vec![];
@@ -593,9 +617,9 @@ impl<'a> BodyTypechecker<'a> {
 				(Tuple(instrs), tuple_type)
 			}
 			ExprKind::Assignment(name, expr) => {
-				let typ = self.vartype(loc, &name);
+				let (path, typ) = self.vartype(loc, name.clone());
 				let value = self.typecheck(expr, typ);
-				(SetLocal(name.clone(), value.into()), self.types.void)
+				(Assignment(path, value.into()), self.types.void)
 			}
 			// ExprKind::GetLocal(name) => (GetLocal(name.clone()), self.vartype(loc, &name)),
 			ExprKind::Block(block) => {
@@ -687,7 +711,7 @@ impl<'a> BodyTypechecker<'a> {
 		if typ != actual_type {
 			self.unify(expr.location, typ, actual_type);
 		}
-		Instr { typ, kind }
+		Instr { location: expr.location.0, typ, kind }
 	}
 
 	fn typecheck_block(&mut self, block: &Indented, result: TypeId) -> Block {
@@ -714,22 +738,23 @@ impl<'a> BodyTypechecker<'a> {
 			}
 		}
 		let result = if self.types[result] == PossiblyUnspecifiedType::Void {
-			Instr { typ: self.types.void, kind: InstrKind::NoOp }
+			Instr { location: block.location.0, typ: self.types.void, kind: InstrKind::NoOp }
 		} else if let Some(stmt) = block.stmts.last() {
 			match stmt {
 				Stmt::Expression(expr) => self.typecheck(expr, result),
 				Stmt::DefLocal(vardef) => {
 					let name = vardef.name.clone();
+					let location = vardef.location.0;
 					let typ = self.resolve_typename(&vardef.typename);
 					let expr = self.typecheck(&vardef.value.clone().unwrap(), typ);
 					stmts.push((Some((name, vardef.mutable)), expr));
 					self.unify(vardef.location, result, self.types.void);
-					Instr { typ: self.types.void, kind: InstrKind::NoOp }
+					Instr { location, typ: self.types.void, kind: InstrKind::NoOp }
 				}
 			}
 		} else {
 			self.unify(block.location, result, self.types.void);
-			Instr { typ: self.types.void, kind: InstrKind::NoOp }
+			Instr { location: block.location.0, typ: self.types.void, kind: InstrKind::NoOp }
 		};
 		self.locals.truncate(locals_count);
 		Block { stmts, result }
@@ -775,16 +800,16 @@ impl<'a> BodyTypechecker<'a> {
 		});
 	}
 
-	fn vartype(&mut self, location: (u32, u32), name: &str) -> TypeId {
+	fn vartype(&mut self, location: (u32, u32), name: Str) -> (Str, TypeId) {
 		for (variable, typ) in self.locals.iter().rev() {
 			if *name == **variable {
-				return *typ;
+				return (name.clone(), *typ);
 			}
 		}
 
-		let path = if name.contains('.') { name } else { &format!("{}.{}", self.module, name) };
-		if let Some((global_typ, _)) = self.program.globals.get(path) {
-			return self.types.insert_specified(global_typ);
+		let path = if name.contains('.') { name.clone() } else { format!("{}.{}", self.module, name).into() };
+		if let Some((global_typ, _)) = self.program.globals.get(&path) {
+			return (path, self.types.insert_specified(global_typ));
 		}
 
 		self.errors.push(Error {
@@ -793,7 +818,7 @@ impl<'a> BodyTypechecker<'a> {
 			message: format!("name {:?} is not defined", name),
 			kind: PpknErrorKind::NameError,
 		});
-		self.types.insert(PossiblyUnspecifiedType::Unknown)
+		(path, self.types.insert(PossiblyUnspecifiedType::Unknown))
 	}
 
 	fn resolve_typename(&mut self, typename: &Typename) -> TypeId {

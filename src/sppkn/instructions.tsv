@@ -1,0 +1,159 @@
+Instruction	Immediates	Parameters	Code
+unreachable			manual!
+nop			manual!
+block	typ:Type size:usize		manual!
+loop	typ:Type size:usize		manual!
+if_then	typ:Type size:usize		manual!
+else	size:usize		manual!
+end			manual!
+br	label:usize		manual!
+br_if	label:usize		manual!
+jump_into	labels:Vec<usize>		manual!
+return			manual!
+call:func	index:usize		manual!
+call:import	index:usize		manual!
+call_indirect	index:usize		manual!
+drop			manual!
+select	typ:ValueType		manual!
+global.get	idx:usize		manual!
+global.set	idx:usize		manual!
+local.get	idx:usize		manual!
+local.set	idx:usize		manual!
+local.tee	idx:usize		manual!
+memory.size			manual!
+memory.grow			manual!
+memory.copy			manual!
+f32.const	value:f32		value
+f32.load	offset:usize	i:usize	u32::from_le_bytes(vec[i..i + 4].try_into().unwrap()) as u64
+f32.store	offset:usize	i:usize x:f32	vec[i..i + 4].copy_from_slice(&x.to_le_bytes());
+f32.abs		x:f32	x.abs()
+f32.ceil		x:f32	x.ceil()
+f32.floor		x:f32	x.floor()
+f32.nearest		x:f32	x.round()
+f32.neg		x:f32	-x
+f32.sqrt		x:f32	x.sqrt()
+f32.trunc		x:f32	x.trunc()
+f32.copysign		x:f32 y:f32	x.copysign(y)
+f32.add		x:f32 y:f32	x + y
+f32.div		x:f32 y:f32	x / y
+f32.max		x:f32 y:f32	x.max(y)
+f32.min		x:f32 y:f32	x.min(y)
+f32.mul		x:f32 y:f32	x * y
+f32.sub		x:f32 y:f32	x - y
+f32.eq		x:f32 y:f32	x == y
+f32.ge		x:f32 y:f32	x >= y
+f32.gt		x:f32 y:f32	x > y
+f32.le		x:f32 y:f32	x <= y
+f32.lt		x:f32 y:f32	x < y
+f32.ne		x:f32 y:f32	x != y
+i32.const	value:i32		value
+i32.load	offset:usize	i:usize	u32::from_le_bytes(vec[i..i + 4].try_into().unwrap()) as u64
+i32.store	offset:usize	i:usize x:i32	vec[i..i + 4].copy_from_slice(&x.to_le_bytes());
+i32.and		x:i32 y:i32	x & y
+i32.or		x:i32 y:i32	x | y
+i32.xor		x:i32 y:i32	x ^ y
+i32.add	location:usize	x:i32 y:i32	x.checked_add(y)?
+i32.div	location:usize	x:i32 y:i32	x.checked_div(y)?
+i32.mul	location:usize	x:i32 y:i32	x.checked_mul(y)?
+i32.rem	location:usize	x:i32 y:i32	x.checked_rem(y)?
+i32.rotl		x:i32 y:i32	x.rotate_left(y)
+i32.rotr		x:i32 y:i32	x.rotate_right(y)
+i32.shl	location:usize	x:i32 y:u32	x.checked_shl(y)?
+i32.shr	location:usize	x:i32 y:u32	x.checked_shr(y)?
+i32.sub	location:usize	x:i32 y:i32	x.checked_sub(y)?
+i32.eqz		x:i32	x == 0
+i32.eq		x:i32 y:i32	x != y
+i32.ge		x:i32 y:i32	x >= y
+i32.gt		x:i32 y:i32	x > y
+i32.le		x:i32 y:i32	x <= y
+i32.lt		x:i32 y:i32	x < y
+i32.ne		x:i32 y:i32	x != y
+u32.const	value:u32		value
+u32.load	offset:usize	i:usize	u32::from_le_bytes(vec[i..i + 4].try_into().unwrap()) as u64
+u32.store	offset:usize	i:usize x:u32	vec[i..i + 4].copy_from_slice(&x.to_le_bytes());
+u32.and		x:u32 y:u32	x & y
+u32.or		x:u32 y:u32	x | y
+u32.xor		x:u32 y:u32	x ^ y
+u32.add	location:usize	x:u32 y:u32	x.checked_add(y)?
+u32.div	location:usize	x:u32 y:u32	x.checked_div(y)?
+u32.mul	location:usize	x:u32 y:u32	x.checked_mul(y)?
+u32.rem	location:usize	x:u32 y:u32	x.checked_rem(y)?
+u32.rotl		x:u32 y:u32	x.rotate_left(y)
+u32.rotr		x:u32 y:u32	x.rotate_right(y)
+u32.shl	location:usize	x:u32 y:u32	x.checked_shl(y)?
+u32.shr	location:usize	x:u32 y:u32	x.checked_shr(y)?
+u32.sub	location:usize	x:u32 y:u32	x.checked_sub(y)?
+u32.eqz		x:u32	x == 0
+u32.eq		x:u32 y:u32	x != y
+u32.ge		x:u32 y:u32	x >= y
+u32.gt		x:u32 y:u32	x > y
+u32.le		x:u32 y:u32	x <= y
+u32.lt		x:u32 y:u32	x < y
+u32.ne		x:u32 y:u32	x != y
+f64.const	value:f64		value
+f64.load	offset:usize	i:usize	u64::from_le_bytes(vec[i..i + 8].try_into().unwrap())
+f64.store	offset:usize	i:usize x:f64	vec[i..i + 8].copy_from_slice(&x.to_le_bytes());
+f64.abs		x:f64	x.abs()
+f64.ceil		x:f64	x.ceil()
+f64.floor		x:f64	x.floor()
+f64.nearest		x:f64	x.round()
+f64.neg		x:f64	-x
+f64.sqrt		x:f64	x.sqrt()
+f64.trunc		x:f64	x.trunc()
+f64.copysign		x:f64 y:f64	x.copysign(y)
+f64.add		x:f64 y:f64	x + y
+f64.div		x:f64 y:f64	x / y
+f64.max		x:f64 y:f64	x.max(y)
+f64.min		x:f64 y:f64	x.min(y)
+f64.mul		x:f64 y:f64	x * y
+f64.sub		x:f64 y:f64	x - y
+f64.eq		x:f64 y:f64	x == y
+f64.ge		x:f64 y:f64	x >= y
+f64.gt		x:f64 y:f64	x > y
+f64.le		x:f64 y:f64	x <= y
+f64.lt		x:f64 y:f64	x < y
+f64.ne		x:f64 y:f64	x != y
+i64.const	value:i64		value
+i64.load	offset:usize	i:usize	u64::from_le_bytes(vec[i..i + 8].try_into().unwrap())
+i64.store	offset:usize	i:usize x:i64	vec[i..i + 8].copy_from_slice(&x.to_le_bytes());
+i64.and		x:i64 y:i64	x & y
+i64.or		x:i64 y:i64	x | y
+i64.xor		x:i64 y:i64	x ^ y
+i64.add	location:usize	x:i64 y:i64	x.checked_add(y)?
+i64.div	location:usize	x:i64 y:i64	x.checked_div(y)?
+i64.mul	location:usize	x:i64 y:i64	x.checked_mul(y)?
+i64.rem	location:usize	x:i64 y:i64	x.checked_rem(y)?
+i64.rotl		x:i64 y:i64	x.rotate_left(y)
+i64.rotr		x:i64 y:i64	x.rotate_right(y)
+i64.shl	location:usize	x:i64 y:u64	x.checked_shl(y)?
+i64.shr	location:usize	x:i64 y:u64	x.checked_shr(y)?
+i64.sub	location:usize	x:i64 y:i64	x.checked_sub(y)?
+i64.eqz		x:i64	x == 0
+i64.eq		x:i64 y:i64	x != y
+i64.ge		x:i64 y:i64	x >= y
+i64.gt		x:i64 y:i64	x > y
+i64.le		x:i64 y:i64	x <= y
+i64.lt		x:i64 y:i64	x < y
+i64.ne		x:i64 y:i64	x != y
+u64.const	value:u64		value
+u64.load	offset:usize	i:usize	u64::from_le_bytes(vec[i..i + 8].try_into().unwrap())
+u64.store	offset:usize	i:usize x:u64	vec[i..i + 8].copy_from_slice(&x.to_le_bytes());
+u64.and		x:u64 y:u64	x & y
+u64.or		x:u64 y:u64	x | y
+u64.xor		x:u64 y:u64	x ^ y
+u64.add	location:usize	x:u64 y:u64	x.checked_add(y)?
+u64.div	location:usize	x:u64 y:u64	x.checked_div(y)?
+u64.mul	location:usize	x:u64 y:u64	x.checked_mul(y)?
+u64.rem	location:usize	x:u64 y:u64	x.checked_rem(y)?
+u64.rotl		x:u64 y:u64	x.rotate_left(y)
+u64.rotr		x:u64 y:u64	x.rotate_right(y)
+u64.shl	location:usize	x:u64 y:u64	x.checked_shl(y)?
+u64.shr	location:usize	x:u64 y:u64	x.checked_shr(y)?
+u64.sub	location:usize	x:u64 y:u64	x.checked_sub(y)?
+u64.eqz		x:u64	x == 0
+u64.eq		x:u64 y:u64	x != y
+u64.ge		x:u64 y:u64	x >= y
+u64.gt		x:u64 y:u64	x > y
+u64.le		x:u64 y:u64	x <= y
+u64.lt		x:u64 y:u64	x < y
+u64.ne		x:u64 y:u64	x != y

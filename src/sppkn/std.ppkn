@@ -1,9 +1,10 @@
 # PPKN STD PROTOTYPE
 
 mut HEAP_END: u32 = 32768
+mut PRINT_BUFFER: str = ""
 
 
-fun clone_bytes(src: u32, size: u32) -> (u32, u32)
+fun clone_str(src: u32, size: u32) -> (u32, u32)
 	let dst: u32 = malloc(size)
 	memory_copy(dst, src, size)
 	(dst, size)
@@ -18,5 +19,15 @@ fun malloc(size: u32) -> u32
 fun free(ptr: u32, size: u32)
 	if ptr + size == HEAP_END
 		HEAP_END = ptr
+
+
+fun print(string: str)
+	PRINT_BUFFER = PRINT_BUFFER + string
+
+fun str_add(lhs: u32, lhs_size: u32, rhs: u32, rhs_size: u32) -> (u32, u32)
+	(0, 0) # TODO
+
+fun println(string: str)
+	123 # TODO
 
 # END
