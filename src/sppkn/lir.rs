@@ -91,7 +91,7 @@ struct Variables {
 impl<'a> ProgramCompiler<'a> {
 	fn new(program: &'a Program) -> Self {
 		assert!(!program.is_poisoned());
-		let main = program.main.to_string() + ".main";
+		let main = program.main.to_string() + ":main";
 		let queue = VecDeque::from([main.into()]);
 		let lir = Bytecode {
 			types: IndexSet::new(),
@@ -114,9 +114,20 @@ impl<'a> ProgramCompiler<'a> {
 	}
 
 	fn process_function(&mut self, fname: Str) {
-		let function = &self.program.functions[&fname];
-		let bytecode = FunctionCompiler::new(self, function).compile();
-		self.lir.functions.insert(fname, bytecode);
+		if let Some(function) = self.program.functions.get(&fname) {
+			let bytecode = FunctionCompiler::new(self, function).compile();
+			self.lir.functions.insert(fname, bytecode);
+		} else {
+			let import = &self.program.imports[&fname];
+			let mut parameters = vec![];
+			for (name, typ) in &import.parameters {
+				let typ = self.process_type(typ);
+				parameters.extend(&typ);
+			}
+			let signature = FuncType { parameters, results: self.process_type(&import.result) };
+			let (namespace, func_name) = fname.split_once(':').unwrap();
+			self.lir.imports.insert(Import { signature, namespace: namespace.into(), func_name: func_name.into() });
+		}
 	}
 
 	fn queue_function(&mut self, function: &str) -> usize {
@@ -151,13 +162,14 @@ impl<'a> ProgramCompiler<'a> {
 				flattened
 			}
 			Type::Array(_) => vec![ValueType::I32, ValueType::I32, ValueType::I32],
-			Type::Name(typename) => match &typename[..] {
+			Type::Name(typ) => match &typ[..] {
 				"str" => vec![ValueType::I32, ValueType::I32],
 				"i32" | "u32" | "i16" | "u16" | "i8" | "u8" => vec![ValueType::I32],
 				"i64" | "u64" => vec![ValueType::I64],
 				"f32" => vec![ValueType::F32],
 				"f64" => vec![ValueType::F64],
-				_ => todo!("Type {}", typename),
+				typ if self.program.types.get(typ).is_some_and(|t| *t == NamedType::Foreign) => vec![ValueType::ExternRef],
+				_ => todo!("Type {}", typ),
 			},
 			Type::Void => vec![],
 		}

@@ -787,7 +787,14 @@ impl<'a> BodyTypechecker<'a> {
 	fn resolve_function(&mut self, function: &str) -> Result<(Str, Vec<TypeId>, TypeId), ()> {
 		let (module, fname) =
 			if let Some(i) = function.find(':') { (&function[..i], &function[i + 1..]) } else { (&self.module[..], function) };
-		let Some(f) = &self.program.modules.get(module).and_then(|m| m.ast.functions.get(fname)) else { return Err(()) };
+		let Some(f) = &self.program.modules.get(module).and_then(|m| m.ast.functions.get(fname)) else {
+			let Some(signature) = &self.program.imports.get(function) else {
+				return Err(());
+			};
+			let params = signature.parameters.iter().map(|x| self.types.insert_specified(&x.1)).collect();
+			let result = self.types.insert_specified(&signature.result);
+			return Ok((function.into(), params, result));
+		};
 		let params =
 			f.params.iter().map(|x| self.types.insert_specified(&self.program.resolve_typename(module, &x.typ))).collect();
 		let result = self.types.insert_specified(&self.program.resolve_typename(module, &f.result));

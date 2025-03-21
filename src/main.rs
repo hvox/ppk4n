@@ -49,7 +49,7 @@ fn main() {
 		}
 		_ => {
 			if USE_SPPKN_IMPLEMENTATION {
-				println!("LIR Instruction size: {:?}", size_of::<sppkn::lir::Instr>());
+				// println!("LIR Instruction size: {:?}", size_of::<sppkn::lir::Instr>());
 
 				let path = PathBuf::from(&args[1]);
 				let source = fs::read_to_string(&path).unwrap();
@@ -98,14 +98,20 @@ fn main() {
 					}
 					return;
 				};
-				eprintln!("\tSource path = {:?}", program.root);
-				eprintln!("\t{:?}", program.sources);
-				eprintln!("\t{:?}", program.modules);
-				eprintln!("\tGlobals: {:?}", program.globals);
-				eprintln!("Functions:");
-				for (name, func) in &program.functions {
-					eprintln!("    {}: {:?}", name, func);
+				// eprintln!("\tSource path = {:?}", program.root);
+				// eprintln!("\t{:?}", program.sources);
+				// eprintln!("\t{:?}", program.modules);
+				// eprintln!("\tGlobals: {:?}", program.globals);
+				// eprintln!("Functions:");
+				// for (name, func) in &program.functions {
+				// 	eprintln!("    {}: {:?}", name, func);
+				// }
+
+				let bytecode = program.to_lir();
+				for (name, func) in &bytecode.functions {
+					eprintln!("  {} = {:?}", name, func);
 				}
+				_ = bytecode;
 			} else {
 				let source = fs::read_to_string(&args[1]).unwrap() + include_str!("ppkn/std.ppkn");
 				let lir = ppkn::to_lir(&source).unwrap();
