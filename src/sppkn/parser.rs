@@ -313,6 +313,13 @@ impl<'s> Parser<'s> {
 		use TokenKind::*;
 		match self.tokens[position].kind {
 			LeftParen => {
+				if self.tokens[position + 1].kind == RightParen {
+					let expr = Expr {
+						location: (self.tokens[position].span().0, self.tokens[position].span().1),
+						kind: ExprKind::Nothing,
+					};
+					return Ok((expr.into(), position + 2));
+				}
 				let (expr, pos) = self.parse_expr(position + 1)?;
 				if let Ok(pos) = self.try_parse_token(pos, RightParen) {
 					return Ok((expr, pos));

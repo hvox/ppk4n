@@ -24,10 +24,22 @@ fun free(ptr: u32, size: u32)
 fun print(string: str)
 	PRINT_BUFFER = PRINT_BUFFER + string
 
+
 fun str_add(lhs: u32, lhs_size: u32, rhs: u32, rhs_size: u32) -> (u32, u32)
-	(0, 0) # TODO
+	let result_size = lhs_size + rhs_size
+	let result = malloc(result_size)
+	memory_copy(result, lhs, lhs_size)
+	memory_copy(result + lhs_size, rhs, rhs_size)
+	free(lhs, lhs_size)
+	free(rhs, rhs_size)
+	(result, result_size)
+
 
 fun println(string: str)
 	123 # TODO
+
+
+fun memory_copy(dst: u32, src: u32, size: u32)
+	"intrinsic"
 
 # END

@@ -166,6 +166,7 @@ impl<'a> ProgramCompiler<'a> {
 
 impl Variables {
 	fn insert(&mut self, name: Str, layout: Vec<ValueType>) -> Vec<usize> {
+		// eprintln!("define {:?}: {:?}", name, layout);
 		use ValueType::*;
 		let old_layout = self.locations.remove(&name).unwrap_or(Vec::new());
 		self.shadowed.push((name.clone(), old_layout));
@@ -188,6 +189,18 @@ impl Variables {
 		slots
 	}
 
+	fn reset_shadowed(&mut self, count: usize) {
+		while self.shadowed.len() > count {
+			let (name, layout) = self.shadowed.pop().unwrap();
+			// eprintln!("delete {:?}", name);
+			if layout.is_empty() {
+				self.locations.remove(&name);
+			} else {
+				self.locations.insert(name, layout);
+			}
+		}
+	}
+
 	fn find<'a>(&'a self, name: &str) -> Option<Vec<usize>> {
 		self.locations.get(name).cloned()
 	}
@@ -197,15 +210,14 @@ struct FunctionCompiler<'c, 'p> {
 	function: &'p Function,
 	program: &'p Program,
 	ctx: &'c mut ProgramCompiler<'p>,
-	locals: Vec<ValueType>,
-	named_locals: Vec<(Str, usize)>,
+	locals: Variables,
 	results: Vec<ValueType>,
 }
 
 impl<'a, 'p> FunctionCompiler<'a, 'p> {
 	fn new(ctx: &'a mut ProgramCompiler<'p>, function: &'p Function) -> Self {
 		let results = ctx.process_type(&function.result);
-		Self { program: ctx.program, ctx, locals: Vec::new(), named_locals: Vec::new(), results, function }
+		Self { program: ctx.program, ctx, locals: Variables::default(), results, function }
 	}
 
 	fn compile(mut self) -> Func {
@@ -213,11 +225,11 @@ impl<'a, 'p> FunctionCompiler<'a, 'p> {
 		for (name, typ) in &self.function.parameters {
 			let typ = self.ctx.process_type(typ);
 			parameters.extend(&typ);
-			self.define_local(name.clone(), typ);
+			self.locals.insert(name.clone(), typ);
 		}
 		let mut code = vec![];
 		self.compile_instr(&self.function.body.value, &mut code);
-		let locals = self.locals;
+		let locals = self.locals.valtypes;
 		let signature = FuncType { parameters, results: self.results };
 		Func { signature, locals, code }
 	}
@@ -247,37 +259,35 @@ impl<'a, 'p> FunctionCompiler<'a, 'p> {
 			Tuple(fields) => fields.iter().for_each(|x| self.compile_instr(x, code)),
 			Assignment(name, instr) => {
 				self.compile_instr(instr, code);
-				if let Some((pos, len)) = self.find_local(name) {
-					(pos..(pos + len)).rev().for_each(|x| code.push(Op::LocalSet(x)));
+				if let Some(layout) = self.locals.find(name) {
+					layout.iter().rev().for_each(|&x| code.push(Op::LocalSet(x)));
 				} else {
 					let layout = self.ctx.globals.find(name).unwrap();
 					layout.iter().rev().for_each(|&x| code.push(Op::GlobalSet(x)));
 				};
 			}
 			Identifier(name) => {
-				if let Some((pos, size)) = self.find_local(name) {
-					(pos..self.locals.len()).for_each(|x| code.push(Op::LocalGet(x)));
+				if let Some(layout) = self.locals.find(name) {
+					layout.iter().for_each(|&x| code.push(Op::LocalGet(x)));
 				} else {
 					let layout = self.ctx.queue_global(name);
 					layout.iter().for_each(|&x| code.push(Op::GlobalGet(x)));
 				}
 			}
 			Block(block) => {
+				let shadowed = self.locals.shadowed.len();
 				for (target, instr) in &block.stmts {
 					self.compile_instr(instr, code);
 					let typ = self.function.body.types.realize(instr.typ);
 					if let Some((name, mutable)) = target {
-						let position = self.locals.len();
-						self.locals.extend(self.ctx.process_type(&typ));
-						self.named_locals.push((name.clone(), position));
-						for target in (position..self.locals.len()).rev() {
-							code.push(Op::LocalSet(target));
-						}
+						let layout = self.locals.insert(name.clone(), self.ctx.process_type(&typ));
+						layout.iter().for_each(|&x| code.push(Op::LocalSet(x)));
 					} else {
 						self.compile_drop(&typ, code);
 					}
 				}
 				self.compile_instr(&block.result, code);
+				self.locals.reset_shadowed(shadowed);
 			}
 			While(instr, instr1) => todo!(),
 			If(instr, instr1, instr2) => todo!(),
@@ -310,7 +320,7 @@ impl<'a, 'p> FunctionCompiler<'a, 'p> {
 				}
 			}
 			FnCall(name, args) => match &name[..] {
-				"memory_copy" => {
+				"std.memory_copy" => {
 					args.iter().for_each(|arg| self.compile_instr(arg, code));
 					code.push(Op::MemoryCopy);
 				}
@@ -380,33 +390,27 @@ impl<'a, 'p> FunctionCompiler<'a, 'p> {
 	}
 
 	fn find_local(&self, name: &str) -> Option<(usize, usize)> {
-		let mut last_pos = self.locals.len();
-		for (local, position) in self.named_locals.iter().rev() {
-			if name == &local[..] {
-				return Some((*position, last_pos - position));
-			} else {
-				last_pos = *position;
-			}
-		}
-		None
+		let mut last_pos = self.locals.valtypes.len();
+		// for (local, position) in self.locals.iter().rev() {
+		// 	if name == &local[..] {
+		// 		return Some((*position, last_pos - position));
+		// 	} else {
+		// 		last_pos = *position;
+		// 	}
+		// }
+		unimplemented!()
 	}
 
 	fn find_global(&self, name: &str) -> Option<(usize, usize)> {
-		let mut last_pos = self.locals.len();
-		for (local, position) in self.named_locals.iter().rev() {
-			if name == &local[..] {
-				return Some((*position, last_pos - position));
-			} else {
-				last_pos = *position;
-			}
-		}
-		None
-	}
-
-	fn define_local(&mut self, name: Str, typ: Vec<ValueType>) {
-		let position = self.locals.len();
-		self.locals.extend(typ);
-		self.named_locals.push((name, position));
+		let mut last_pos = self.locals.valtypes.len();
+		// for (local, position) in self.locals.iter().rev() {
+		// 	if name == &local[..] {
+		// 		return Some((*position, last_pos - position));
+		// 	} else {
+		// 		last_pos = *position;
+		// 	}
+		// }
+		unimplemented!()
 	}
 }
 
