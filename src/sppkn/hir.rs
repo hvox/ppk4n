@@ -243,7 +243,7 @@ impl Program {
 				}
 				None => None,
 			};
-			let path = format!("{}.{}", module_name, name).into();
+			let path = format!("{}:{}", module_name, name).into();
 			self.globals.insert(path, (typ, body));
 		}
 		for (_, function) in &ast.functions {
@@ -254,7 +254,7 @@ impl Program {
 			let typechecker = BodyTypechecker::new(&self, module_name, &result, &params[..]);
 			let (body, new_errors) = typechecker.typecheck_body(&function.body);
 			let function = Function { module: module_name.into(), name: name.clone(), parameters: params, result, body };
-			let path = format!("{}.{}", module_name, name).into();
+			let path = format!("{}:{}", module_name, name).into();
 			self.functions.insert(path, function);
 			errors.extend(new_errors);
 		}
@@ -786,12 +786,13 @@ impl<'a> BodyTypechecker<'a> {
 
 	fn resolve_function(&mut self, function: &str) -> Result<(Str, Vec<TypeId>, TypeId), ()> {
 		let (module, fname) =
-			if let Some(i) = function.find('.') { (&function[..i], &function[i + 1..]) } else { (&self.module[..], function) };
-		let Some(f) = &self.program.modules[module].ast.functions.get(fname) else { return Err(()) };
+			if let Some(i) = function.find(':') { (&function[..i], &function[i + 1..]) } else { (&self.module[..], function) };
+		let Some(f) = &self.program.modules.get(module).and_then(|m| m.ast.functions.get(fname)) else { return Err(()) };
 		let params =
 			f.params.iter().map(|x| self.types.insert_specified(&self.program.resolve_typename(module, &x.typ))).collect();
 		let result = self.types.insert_specified(&self.program.resolve_typename(module, &f.result));
-		Ok((format!("{}.{}", module, fname).into(), params, result))
+		let path = format!("{}:{}", module, fname).into();
+		Ok((path, params, result))
 	}
 
 	fn resolve_method(&mut self, receiver: TypeId, method: &str) -> Result<Vec<TypeId>, ()> {
@@ -831,7 +832,7 @@ impl<'a> BodyTypechecker<'a> {
 			}
 		}
 
-		let path = if name.contains('.') { name.clone() } else { format!("{}.{}", self.module, name).into() };
+		let path = if name.contains(':') { name.clone() } else { format!("{}:{}", self.module, name).into() };
 		if let Some((global_typ, _)) = self.program.globals.get(&path) {
 			return (path, self.types.insert_specified(global_typ));
 		}

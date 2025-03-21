@@ -242,7 +242,7 @@ impl<'a, 'p> FunctionCompiler<'a, 'p> {
 				let ptr = self.ctx.lir.data.len() as u32;
 				let length = string.len() as u32;
 				self.ctx.lir.data.extend(string);
-				let clone = self.ctx.queue_function("std.clone_str");
+				let clone = self.ctx.queue_function("std:clone_str");
 				code.extend([Op::U32Const(ptr), Op::U32Const(length), Op::CallFunc(clone)]);
 			}
 			Integer(source) => code.push(match self.function.body.types.realize(instr.typ) {
@@ -314,14 +314,14 @@ impl<'a, 'p> FunctionCompiler<'a, 'p> {
 						("u32", "rem") => code.push(Op::U32Rem(src)),
 						("u32", "shl") => code.push(Op::U32Shl(src)),
 						("u32", "shr") => code.push(Op::U32Shr(src)),
-						("str", "add") => code.push(Op::CallFunc(self.ctx.queue_function("std.str_add"))),
+						("str", "add") => code.push(Op::CallFunc(self.ctx.queue_function("std:str_add"))),
 						x => todo!("{:?}", x),
 					},
 					Type::Void => unreachable!(),
 				}
 			}
 			FnCall(name, args) => match &name[..] {
-				"std.memory_copy" => {
+				"std:memory_copy" => {
 					args.iter().for_each(|arg| self.compile_instr(arg, code));
 					code.push(Op::MemoryCopy);
 				}
@@ -332,7 +332,7 @@ impl<'a, 'p> FunctionCompiler<'a, 'p> {
 						self.compile_instr(instr, code);
 						self.compile_stringify(&typ, code);
 						if string_in_stack {
-							code.push(Op::CallFunc(self.ctx.queue_function("std.str_add")));
+							code.push(Op::CallFunc(self.ctx.queue_function("std:str_add")));
 						} else {
 							string_in_stack = true;
 						}
@@ -340,7 +340,7 @@ impl<'a, 'p> FunctionCompiler<'a, 'p> {
 					if !string_in_stack {
 						self.compile_string("", code);
 					}
-					code.push(Op::CallFunc(self.ctx.queue_function("std.println")));
+					code.push(Op::CallFunc(self.ctx.queue_function("std:println")));
 				}
 				_ => {
 					args.iter().for_each(|arg| self.compile_instr(arg, code));
@@ -374,7 +374,7 @@ impl<'a, 'p> FunctionCompiler<'a, 'p> {
 			Type::Array(_) => todo!(),
 			Type::Name(typ) => match &typ[..] {
 				"i8" | "u8" | "i16" | "u16" | "i32" | "u32" | "f32" | "i64" | "u64" | "f64" => code.push(Op::Drop),
-				"str" => code.push(Op::CallFunc(self.ctx.queue_function("std.free"))),
+				"str" => code.push(Op::CallFunc(self.ctx.queue_function("std:free"))),
 				_ => todo!(),
 			},
 			Type::Void => {}
@@ -386,7 +386,7 @@ impl<'a, 'p> FunctionCompiler<'a, 'p> {
 		let ptr = self.ctx.lir.data.len() as u32;
 		let length = string.len() as u32;
 		self.ctx.lir.data.extend(string);
-		let clone = self.ctx.queue_function("std.clone_str");
+		let clone = self.ctx.queue_function("std:clone_str");
 		code.extend([Op::U32Const(ptr), Op::U32Const(length), Op::CallFunc(clone)]);
 	}
 

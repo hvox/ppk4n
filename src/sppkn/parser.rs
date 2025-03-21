@@ -151,9 +151,9 @@ impl<'s> Parser<'s> {
 					match keyword.as_ref() {
 						"import" => {
 							let (name, pos) = self.parse_identifier_soft(pos);
-							if let Ok(pos) = self.try_parse_token(pos, Dot) {
+							if let Ok(pos) = self.try_parse_token(pos, Colon) {
 								let (signature, pos) = self.parse_imported_function_signature(pos);
-								let path = format!("{}.{}", name, signature.name).into();
+								let path = format!("{}:{}", name, signature.name).into();
 								imported_functions.insert(path, signature);
 								position = self.expect_end_of_line(pos);
 							} else {
@@ -455,13 +455,20 @@ impl<'s> Parser<'s> {
 				return Ok((expr, pos));
 			}
 			Identifier => {
-				let (name, pos) = self.parse_identifier(position)?;
+				let (mut name, mut pos) = self.parse_identifier(position)?;
+				let mut location = self.tokens[position].span();
+				while self.tokens[pos].kind == Colon {
+					let suffix;
+					(suffix, pos) = self.parse_identifier_soft(pos + 1);
+					location.1 = self.tokens[pos - 1].span().1;
+					name = format!("{}:{}", name, suffix).into();
+				}
 				if self.tokens[pos].kind == LeftParen {
 					let (args, pos) = self.parse_arguments(pos);
-					let expr = Expr { location: self.tokens[position].span(), kind: ExprKind::FnCall(name, args) };
+					let expr = Expr { location, kind: ExprKind::FnCall(name, args) };
 					return Ok((expr.into(), pos));
 				}
-				let expr = Expr { location: self.tokens[position].span(), kind: ExprKind::Identifier(name) };
+				let expr = Expr { location, kind: ExprKind::Identifier(name) };
 				return Ok((expr.into(), pos));
 			}
 			Integer => {
