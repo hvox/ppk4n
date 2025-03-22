@@ -65,11 +65,11 @@ fn main() {
 					}
 				}
 
-				let name = Rc::<str>::from(path.file_stem().unwrap().to_string_lossy());
+				let entry_path = Rc::<str>::from(path.file_stem().unwrap().to_string_lossy());
 				let src_root = path.parent().unwrap();
-				let sources = HashMap::from([(name.clone(), source.into())]);
-				let mut program = sppkn::hir::Program::new(src_root, sources, name.clone());
-				if let Err(errors) = program.load_and_typecheck(name.into()) {
+				let sources = HashMap::from([(entry_path.clone(), source.into())]);
+				let mut program = sppkn::hir::Program::new(src_root, sources, entry_path.clone());
+				if let Err(errors) = program.load_and_typecheck(entry_path.clone()) {
 					let skip_panics = false;
 					let mut last_error = (0, 0);
 					for error in errors {
@@ -108,8 +108,13 @@ fn main() {
 				// }
 
 				let bytecode = program.to_lir();
-				for (name, func) in &bytecode.functions {
-					eprintln!("  {} = {:?}", name, func);
+				// for (name, func) in &bytecode.functions {
+				// 	eprintln!("  {} = {:?}", name, func);
+				// }
+				let mut runtime = bytecode.create_runtime();
+				let status = runtime.run();
+				if let Err(error) = status {
+					println!("Exit code: {:?}", error);
 				}
 				_ = bytecode;
 			} else {

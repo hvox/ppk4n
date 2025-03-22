@@ -16,6 +16,7 @@ pub enum PpknErrorKind {
 	SyntaxError,
 	TypeError,
 	NameError,
+	RuntimeError,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]

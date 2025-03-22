@@ -9,12 +9,14 @@ use indexmap::{IndexMap, IndexSet};
 
 use super::hir::*;
 
+const LOGGING: bool = false;
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Bytecode {
 	pub sources: HashMap<Str, Str>,
 	pub types: IndexSet<FuncType>,
 	pub imports: IndexMap<Str, Import>,
-	pub globals: IndexMap<Str, GlobalVariable>,
+	pub globals: Vec<u64>,
 	pub functions: IndexMap<Str, Func>,
 	pub data: Vec<u8>,
 }
@@ -28,6 +30,7 @@ pub struct Import {
 
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Func {
+	pub module: Str,
 	pub signature: FuncType,
 	pub locals: Vec<ValueType>,
 	pub code: Vec<Op>,
@@ -98,7 +101,7 @@ impl<'a> ProgramCompiler<'a> {
 			types: IndexSet::new(),
 			imports: IndexMap::new(),
 			sources: program.sources.clone(),
-			globals: IndexMap::new(),
+			globals: vec![],
 			functions: IndexMap::new(),
 			data: Vec::new(),
 		};
@@ -110,7 +113,9 @@ impl<'a> ProgramCompiler<'a> {
 
 	fn generate_lir(mut self) -> Bytecode {
 		while let Some(name) = self.queue.pop_front() {
-			eprintln!("> Compiling {}", name);
+			if LOGGING {
+				eprintln!("> Compiling {}", name);
+			}
 			self.process_function(name);
 		}
 		self.lir
@@ -151,8 +156,29 @@ impl<'a> ProgramCompiler<'a> {
 		if let Some(layout) = self.globals.find(global) {
 			return layout;
 		}
-		let layout = self.process_type(&self.program.globals[global].0);
-		self.globals.insert(global.into(), layout)
+		let (typ, body) = &self.program.globals[global];
+		let typ = self.process_type(typ);
+		let layout = self.globals.insert(global.into(), typ);
+		let values = body.as_ref().map(|expr| self.process_const_expr(&expr)).unwrap_or_else(|| vec![0; layout.len()]);
+		self.lir.globals.resize(self.lir.globals.len() + layout.len(), 0);
+		for (&i, value) in layout.iter().zip(values) {
+			self.lir.globals[i] = value;
+		}
+		layout
+	}
+
+	fn process_const_expr(&mut self, expr: &Body) -> Vec<u64> {
+		use InstrKind::*;
+		match &expr.value.kind {
+			String(string) => {
+				let start = self.lir.data.len() as u64;
+				self.lir.data.extend(string.as_bytes());
+				let length = string.len() as u64;
+				vec![start, length]
+			}
+			Integer(value) => vec![value.parse().unwrap()],
+			_ => unimplemented!("Constant evaluation of {:?}", expr),
+		}
 	}
 
 	fn process_type(&mut self, typ: &Type) -> Vec<ValueType> {
@@ -244,9 +270,10 @@ impl<'a, 'p> FunctionCompiler<'a, 'p> {
 		}
 		let mut code = vec![];
 		self.compile_instr(&self.function.body.value, &mut code);
+		code.push(Op::End);
 		let locals = self.locals.valtypes;
 		let signature = FuncType { parameters, results: self.results };
-		Func { signature, locals, code }
+		Func { module: self.function.module.clone(), signature, locals, code }
 	}
 
 	fn compile_instr(&mut self, instr: &Instr, code: &mut Vec<Op>) {
