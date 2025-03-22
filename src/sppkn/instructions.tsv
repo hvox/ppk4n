@@ -62,7 +62,7 @@ i32.shl	location:usize	x:i32 y:u32	x.checked_shl(y)?
 i32.shr	location:usize	x:i32 y:u32	x.checked_shr(y)?
 i32.sub	location:usize	x:i32 y:i32	x.checked_sub(y)?
 i32.eqz		x:i32	x == 0
-i32.eq		x:i32 y:i32	x != y
+i32.eq		x:i32 y:i32	x == y
 i32.ge		x:i32 y:i32	x >= y
 i32.gt		x:i32 y:i32	x > y
 i32.le		x:i32 y:i32	x <= y
@@ -84,7 +84,7 @@ u32.shl	location:usize	x:u32 y:u32	x.checked_shl(y)?
 u32.shr	location:usize	x:u32 y:u32	x.checked_shr(y)?
 u32.sub	location:usize	x:u32 y:u32	x.checked_sub(y)?
 u32.eqz		x:u32	x == 0
-u32.eq		x:u32 y:u32	x != y
+u32.eq		x:u32 y:u32	x == y
 u32.ge		x:u32 y:u32	x >= y
 u32.gt		x:u32 y:u32	x > y
 u32.le		x:u32 y:u32	x <= y
@@ -129,7 +129,7 @@ i64.shl	location:usize	x:i64 y:u32	x.checked_shl(y)?
 i64.shr	location:usize	x:i64 y:u32	x.checked_shr(y)?
 i64.sub	location:usize	x:i64 y:i64	x.checked_sub(y)?
 i64.eqz		x:i64	x == 0
-i64.eq		x:i64 y:i64	x != y
+i64.eq		x:i64 y:i64	x == y
 i64.ge		x:i64 y:i64	x >= y
 i64.gt		x:i64 y:i64	x > y
 i64.le		x:i64 y:i64	x <= y
@@ -151,7 +151,7 @@ u64.shl	location:usize	x:u64 y:u32	x.checked_shl(y)?
 u64.shr	location:usize	x:u64 y:u32	x.checked_shr(y)?
 u64.sub	location:usize	x:u64 y:u64	x.checked_sub(y)?
 u64.eqz		x:u64	x == 0
-u64.eq		x:u64 y:u64	x != y
+u64.eq		x:u64 y:u64	x == y
 u64.ge		x:u64 y:u64	x >= y
 u64.gt		x:u64 y:u64	x > y
 u64.le		x:u64 y:u64	x <= y
