@@ -52,12 +52,12 @@ elif sys.argv[1] == "execution":
         print(case, "=> {")
         for name, typ in reversed(params):
             offset = " + offset" if name == "i" else ""
-            print(f"\tlet {name}: {typ} =", from_u64("stack.pop().unwrap()", typ) + f"{offset};")
+            print(f"\tlet {name}: {typ} =", from_u64("self.stack.pop().unwrap()", typ) + f"{offset};")
         code = code.replace("?", ".unwrap()")
         if code.endswith(";"):
             print(f"\t{code}")
         else:
-            print(f"\tlet result = {code};\n\tstack.push({into_u64('result', instr_typ)});")
+            print(f"\tlet result = {code};\n\tself.stack.push({into_u64('result', instr_typ)});")
         print("}")
 else:
     raise Exception(sys.argv[1])

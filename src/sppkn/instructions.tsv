@@ -6,6 +6,7 @@ loop	typ:Type size:usize		manual!
 if_then	typ:Type size:usize		manual!
 else	size:usize		manual!
 end			manual!
+end:if			manual!
 br	label:usize		manual!
 br_if	label:usize		manual!
 jump_into	labels:Vec<usize>		manual!
