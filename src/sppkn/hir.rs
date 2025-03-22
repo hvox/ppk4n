@@ -5,6 +5,7 @@ use std::{
 	collections::HashMap,
 	fmt::Debug,
 	fs::{self, read_to_string},
+	io::Write,
 	ops::{Add, Deref, Index, IndexMut},
 	path::{Path, PathBuf},
 	rc::Rc,
@@ -289,6 +290,40 @@ impl Program {
 
 	pub fn is_poisoned(&self) -> bool {
 		self.poisoned
+	}
+
+	pub fn to_bytes(&self) -> Vec<u8> {
+		let mut bytes = vec![];
+		bytes.write(&(self.main.len() as u32).to_le_bytes()).unwrap();
+		bytes.write(self.main.as_bytes());
+		bytes.write(&(self.sources.len() as u32).to_le_bytes()).unwrap();
+		for (module, source) in &self.sources {
+			bytes.write(&(module.len() as u32).to_le_bytes()).unwrap();
+			bytes.write(module.as_bytes());
+			bytes.write(&(source.len() as u32).to_le_bytes()).unwrap();
+			bytes.write(source.as_bytes());
+		}
+		bytes
+	}
+
+	pub fn from_bytes(bytes: &[u8]) -> Self {
+		let mut i = 0;
+		let mut sources = HashMap::new();
+		let main_len = u32::from_le_bytes(bytes[0..4].try_into().unwrap()) as usize;
+		let main = String::from_utf8_lossy(&bytes[4..4 + main_len]);
+		i = 4 + main_len;
+		let sources_count = u32::from_le_bytes(bytes[i..i + 4].try_into().unwrap()) as usize;
+		i += 4;
+		for _ in 0..sources_count {
+			let length = u32::from_le_bytes(bytes[i..i + 4].try_into().unwrap()) as usize;
+			let module = String::from_utf8_lossy(&bytes[i + 4..i + 4 + length]);
+			i += 4 + length;
+			let length = u32::from_le_bytes(bytes[i..i + 4].try_into().unwrap()) as usize;
+			let source = String::from_utf8_lossy(&bytes[i + 4..i + 4 + length]);
+			i += 4 + length;
+			sources.insert(module.into(), source.into());
+		}
+		Self::new(PathBuf::new(), sources, main.into())
 	}
 }
 

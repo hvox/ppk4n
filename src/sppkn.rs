@@ -6,3 +6,4 @@ pub mod hir;
 pub mod lir;
 pub mod runtime;
 pub mod transpiler;
+pub mod wasm;
