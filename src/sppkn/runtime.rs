@@ -2,7 +2,7 @@
 
 use std::{collections::HashMap, fmt::Display};
 
-use crate::sppkn::lir::BlockType;
+use crate::ppkn::lir::BlockType;
 
 use super::{
     error::{Error, PpknErrorKind},

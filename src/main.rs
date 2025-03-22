@@ -4,20 +4,11 @@ use std::fs;
 use std::hash::Hash;
 use std::hash::Hasher;
 use std::path::PathBuf;
-use std::process::exit;
 use std::rc::Rc;
 
-use ppkn::{parse, PpknError};
-use sppkn::hir::Program;
-use utils::stringify_lossy;
+use ppkn::hir::Program;
 
 mod ppkn;
-mod pyppkn;
-mod sppkn;
-mod utils;
-
-const USE_SPPKN_IMPLEMENTATION: bool = true;
-const SPPKN_INNER_LOADER: bool = true;
 
 fn main() {
     let args: Vec<_> = args().collect();
@@ -52,7 +43,7 @@ fn main() {
             let Ok(program) = load_program(&args[2]) else {
                 return;
             };
-            print!("{}", program.to_rust());
+            print!("{}", program.to_zig());
         }
         "into-wasm" => {
             let Ok(program) = load_program(&args[2]) else {
@@ -75,35 +66,16 @@ fn main() {
             }
         }
         _ => {
-            if USE_SPPKN_IMPLEMENTATION {
-                // println!("LIR Instruction size: {:?}", size_of::<sppkn::lir::Instr>());
-
-                // eprintln!("\tSource path = {:?}", program.root);
-                // eprintln!("\t{:?}", program.sources);
-                // eprintln!("\t{:?}", program.modules);
-                // eprintln!("\tGlobals: {:?}", program.globals);
-                // eprintln!("Functions:");
-                // for (name, func) in &program.functions {
-                // 	eprintln!("    {}: {:?}", name, func);
-                // }
-
-                let Ok(program) = load_program(&args[1]) else {
-                    return;
-                };
-                let bytecode = program.to_lir();
-                let mut runtime = bytecode.create_runtime();
-                let status = runtime.run();
-                if let Err(error) = status {
-                    println!("Exit code: {:?}", error);
-                }
-                _ = bytecode;
-            } else {
-                let source = fs::read_to_string(&args[1]).unwrap() + include_str!("ppkn/std.ppkn");
-                let lir = ppkn::to_lir(&source).unwrap();
-                let mut intrerpreter = ppkn::yalir_interpreter::Interpreter::new(&lir);
-                intrerpreter.interpret("main").unwrap();
-                // checked(&source, run(&source));
+            let Ok(program) = load_program(&args[1]) else {
+                return;
+            };
+            let bytecode = program.to_lir();
+            let mut runtime = bytecode.create_runtime();
+            let status = runtime.run();
+            if let Err(error) = status {
+                println!("Exit code: {:?}", error);
             }
+            _ = bytecode;
         }
     }
 }
@@ -111,26 +83,10 @@ fn main() {
 fn load_program(path: &str) -> Result<Program, ()> {
     let path = PathBuf::from(path);
     let source = fs::read_to_string(&path).unwrap();
-
-    if !SPPKN_INNER_LOADER {
-        use sppkn::loader;
-        let loader = loader::load(
-            path.parent().unwrap().into(),
-            "main".into(),
-            source.clone().into(),
-        );
-        if false {
-            for (name, module) in loader.modules {
-                println!("\t{:?} : {:?}", name, module);
-            }
-            println!("\nERRORS: {:?}", loader.errors);
-        }
-    }
-
     let entry_path = Rc::<str>::from(path.file_stem().unwrap().to_string_lossy());
     let src_root = path.parent().unwrap();
     let sources = HashMap::from([(entry_path.clone(), source.into())]);
-    let program = sppkn::hir::Program::new(src_root, sources, entry_path.clone());
+    let program = ppkn::hir::Program::new(src_root, sources, entry_path.clone());
     typecheck_program(program)
 }
 
@@ -193,52 +149,4 @@ fn pack_data(data: &[u8]) -> Vec<u8> {
     bytes[..].hash(&mut hasher);
     bytes.extend(hasher.finish().to_le_bytes());
     bytes
-}
-
-fn checked<'a, T>(source: &'a str, result: Result<T, impl Into<PpknError<'a>>>) -> T {
-    match result {
-        Ok(something) => something,
-        Err(error) => {
-            let error = error.into();
-            let (row, column, line) = find_line_with(&source, error.location);
-            println!("{:3}: {}", row, line.replace("\t", " "));
-            println!(
-                "    {}{}",
-                " ".repeat(column),
-                "^".repeat(error.location.len())
-            );
-            println!("{}: {}", error.typ, error.message);
-            exit(1);
-        }
-    }
-}
-
-fn find_line_with<'a>(text: &'a str, content: &str) -> (usize, usize, &'a str) {
-    let location = content.as_ptr() as usize - text.as_ptr() as usize;
-    let mut line_number = 1;
-    let mut line_start = 0;
-    let mut line_end = text.len();
-    let mut found_line = false;
-    for (i, ch) in text.char_indices() {
-        match found_line {
-            false => {
-                found_line |= i == location;
-                if ch == '\n' {
-                    line_start = i + ch.len_utf8();
-                    line_number += 1;
-                }
-            }
-            true => {
-                if ch == '\n' {
-                    line_end = i;
-                    break;
-                }
-            }
-        }
-    }
-    (
-        line_number,
-        1 + location - line_start,
-        &text[line_start..line_end],
-    )
 }
