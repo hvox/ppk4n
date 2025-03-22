@@ -1,0 +1,5 @@
+# aboba.ppkn
+
+fun bibuka(x: i32, y: i32) -> i32
+	println("bibuka")
+	x + y

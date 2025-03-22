@@ -1,3 +1,20 @@
-fun main() {
-    println "hello world"
-}
+# hello.ppkn
+
+use aboba
+
+fun main()
+	aboba(123, 321)
+	# aboba(2147483647, 321)
+	mut x = 100
+	while x > 0
+		42
+		if x % 10 == 5
+			println("fives")
+		if x % 4 == 1
+			println("quadriodd number")
+		x = x - 1
+	println("hello world")
+	aboba:bibuka(123, 456)
+
+fun aboba(x: i32, y: i32) -> i32
+	x + y
