@@ -1,3 +1,4 @@
+#![allow(clippy::ptr_arg, clippy::only_used_in_recursion)]
 pub mod error;
 pub mod hir;
 pub mod lexer;

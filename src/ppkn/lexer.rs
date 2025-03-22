@@ -1,5 +1,3 @@
-#![allow(unused)]
-
 use std::fmt::Debug;
 
 pub fn tokenize(source: &str) -> Vec<Token> {
@@ -75,8 +73,6 @@ pub enum TokenKind {
     Fun,
     If,
     Or,
-    Print,
-    Println,
     Return,
     Super,
     This,
@@ -264,13 +260,13 @@ impl<'s> Lexer<'s> {
     }
 
     fn number(&mut self) -> TokenKind {
-        while matches!(self.peek(), '0'..='9') {
+        while self.peek().is_ascii_digit() {
             self.read();
         }
         if self.peek() != '.' {
             return TokenKind::Integer;
         }
-        while matches!(self.peek(), '0'..='9') {
+        while self.peek().is_ascii_digit() {
             self.read();
         }
         TokenKind::Decimal
@@ -291,10 +287,7 @@ impl<'s> Lexer<'s> {
     }
 
     fn peek(&self) -> char {
-        match self.source[self.position..].chars().next() {
-            Some(ch) => ch,
-            None => '\n',
-        }
+        self.source[self.position..].chars().next().unwrap_or('\n')
     }
 
     // TODO: replace with if_matches<T>(...) -> T

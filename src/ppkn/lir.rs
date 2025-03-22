@@ -1,9 +1,6 @@
-#![allow(unused)]
-
 use indexmap::{IndexMap, IndexSet};
 use std::{
     collections::{HashMap, VecDeque},
-    num::{NonZeroU16, NonZeroUsize},
     rc::Rc,
 };
 
@@ -135,12 +132,12 @@ impl<'a> ProgramCompiler<'a> {
     fn queue_function(&mut self, fname: &str) -> Op {
         // println!("queue {}", fname);
         if let Some(idx) = self.lir.functions.get_index_of(fname) {
-            return Op::CallFunc(idx);
+            Op::CallFunc(idx)
         } else if let Some(idx) = self.lir.imports.get_index_of(fname) {
             return Op::CallImport(idx);
         } else if let Some(import) = self.program.imports.get(fname) {
             let mut parameters = vec![];
-            for (name, typ) in &import.parameters {
+            for (_, typ) in &import.parameters {
                 let typ = self.process_type(typ);
                 parameters.extend(&typ);
             }
@@ -173,7 +170,7 @@ impl<'a> ProgramCompiler<'a> {
         let layout = self.globals.insert(global.into(), typ);
         let values = body
             .as_ref()
-            .map(|expr| self.process_const_expr(&expr))
+            .map(|expr| self.process_const_expr(expr))
             .unwrap_or_else(|| vec![0; layout.len()]);
         self.lir
             .globals
@@ -203,7 +200,7 @@ impl<'a> ProgramCompiler<'a> {
             Type::Tuple(items) => {
                 let mut flattened = vec![];
                 for item in items {
-                    flattened.extend(self.process_type(&item));
+                    flattened.extend(self.process_type(item));
                 }
                 flattened
             }
@@ -233,7 +230,7 @@ impl Variables {
     fn insert(&mut self, name: Str, layout: Vec<ValueType>) -> Vec<usize> {
         // eprintln!("define {:?}: {:?}", name, layout);
         use ValueType::*;
-        let old_layout = self.locations.remove(&name).unwrap_or(Vec::new());
+        let old_layout = self.locations.remove(&name).unwrap_or_default();
         self.shadowed.push((name.clone(), old_layout));
         let mut new = |valtype| {
             let position = self.valtypes.len();
@@ -266,14 +263,13 @@ impl Variables {
         }
     }
 
-    fn find<'a>(&'a self, name: &str) -> Option<Vec<usize>> {
+    fn find(&self, name: &str) -> Option<Vec<usize>> {
         self.locations.get(name).cloned()
     }
 }
 
 struct FunctionCompiler<'c, 'p> {
     function: &'p Function,
-    program: &'p Program,
     ctx: &'c mut ProgramCompiler<'p>,
     locals: Variables,
     results: Vec<ValueType>,
@@ -283,7 +279,6 @@ impl<'a, 'p> FunctionCompiler<'a, 'p> {
     fn new(ctx: &'a mut ProgramCompiler<'p>, function: &'p Function) -> Self {
         let results = ctx.process_type(&function.result);
         Self {
-            program: ctx.program,
             ctx,
             locals: Variables::default(),
             results,
@@ -335,7 +330,6 @@ impl<'a, 'p> FunctionCompiler<'a, 'p> {
                 },
                 _ => unreachable!(),
             }),
-            GetLocal(_) => todo!(),
             Tuple(fields) => fields.iter().for_each(|x| self.compile_instr(x, code)),
             Assignment(name, instr) => {
                 self.compile_instr(instr, code);
@@ -365,7 +359,7 @@ impl<'a, 'p> FunctionCompiler<'a, 'p> {
                 for (target, instr) in &block.stmts {
                     self.compile_instr(instr, code);
                     let typ = self.function.body.types.realize(instr.typ);
-                    if let Some((name, mutable)) = target {
+                    if let Some((name, _mutable)) = target {
                         let layout = self
                             .locals
                             .insert(name.clone(), self.ctx.process_type(&typ));
@@ -397,7 +391,14 @@ impl<'a, 'p> FunctionCompiler<'a, 'p> {
                 let blocktype = match valuetype.len() {
                     0 => BlockType::Void,
                     1 => BlockType::ValueType(valuetype[0]),
-                    _ => todo!(),
+                    _ => {
+                        let functype = FuncType {
+                            parameters: Vec::new(),
+                            results: valuetype.clone(),
+                        };
+                        let (index, _) = self.ctx.lir.types.insert_full(functype);
+                        BlockType::TypeIndex(index)
+                    }
                 };
                 let mut then_code = vec![];
                 self.compile_instr(then, &mut then_code);
@@ -414,7 +415,7 @@ impl<'a, 'p> FunctionCompiler<'a, 'p> {
             MethodCall(receiver, method, args) => {
                 let src = instr.location as usize;
                 let typ = self.function.body.types.realize(receiver.typ);
-                self.compile_instr(&receiver, code);
+                self.compile_instr(receiver, code);
                 args.iter().for_each(|x| self.compile_instr(x, code));
                 match &typ {
                     Type::Tuple(_) => unreachable!(),
@@ -492,7 +493,7 @@ impl<'a, 'p> FunctionCompiler<'a, 'p> {
         }
     }
 
-    fn compile_stringify(&mut self, typ: &Type, code: &mut Vec<Op>) {
+    fn compile_stringify(&mut self, typ: &Type, _code: &mut Vec<Op>) {
         match typ {
             Type::Tuple(_) => unreachable!(),
             Type::Array(_) => unreachable!(),
@@ -527,32 +528,9 @@ impl<'a, 'p> FunctionCompiler<'a, 'p> {
         let clone = self.ctx.queue_function("std:clone_str");
         code.extend([Op::U32Const(ptr), Op::U32Const(length), clone]);
     }
-
-    fn find_local(&self, name: &str) -> Option<(usize, usize)> {
-        let mut last_pos = self.locals.valtypes.len();
-        // for (local, position) in self.locals.iter().rev() {
-        // 	if name == &local[..] {
-        // 		return Some((*position, last_pos - position));
-        // 	} else {
-        // 		last_pos = *position;
-        // 	}
-        // }
-        unimplemented!()
-    }
-
-    fn find_global(&self, name: &str) -> Option<(usize, usize)> {
-        let mut last_pos = self.locals.valtypes.len();
-        // for (local, position) in self.locals.iter().rev() {
-        // 	if name == &local[..] {
-        // 		return Some((*position, last_pos - position));
-        // 	} else {
-        // 		last_pos = *position;
-        // 	}
-        // }
-        unimplemented!()
-    }
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq)]
 pub enum Op {
     Unreachable,

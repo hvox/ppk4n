@@ -69,7 +69,7 @@ impl Loader {
             name: dependency_name,
         } in deps
         {
-            if let Err(_) = self.load(dependency_name) {
+            if self.load(dependency_name).is_err() {
                 self.errors.push(Error::new(
                     name.clone(),
                     location,
@@ -78,6 +78,6 @@ impl Loader {
                 ));
             }
         }
-        return Ok(());
+        Ok(())
     }
 }

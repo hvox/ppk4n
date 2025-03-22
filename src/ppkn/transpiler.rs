@@ -11,7 +11,7 @@ impl Program {
             let fname = transpile_fname(fname);
             code.push_str(&format!("def {}(", fname));
             for (i, (name, typ)) in f.parameters.iter().enumerate() {
-                code.push_str(&format!("{}: {}", name, transpile_type(&typ)));
+                code.push_str(&format!("{}: {}", name, transpile_type(typ)));
                 if i != f.parameters.len() - 1 {
                     code.push_str(", ");
                 }
@@ -40,7 +40,7 @@ impl Program {
             let fname = transpile_fname(fname);
             code.push_str(&format!("fn {}(", fname));
             for (i, (name, typ)) in f.parameters.iter().enumerate() {
-                code.push_str(&format!("{}: {}", name, transpile_type(&typ)));
+                code.push_str(&format!("{}: {}", name, transpile_type(typ)));
                 if i != f.parameters.len() - 1 {
                     code.push_str(", ");
                 }
@@ -78,22 +78,21 @@ mod python {
                 "(".to_string()
                     + &fields
                         .iter()
-                        .map(|x| transpile_instr(x))
+                        .map(transpile_instr)
                         .collect::<Vec<_>>()
                         .join(", ")
                     + ")"
             }
             Assignment(variable, value) => format!("{} = {}", variable, transpile_instr(value)),
-            GetLocal(id) => id.to_string(),
             Block(block) => {
                 let mut code = "".to_string();
                 for (id, value) in &block.stmts {
                     if let Some((id, _mutable)) = id {
                         code.push_str(&format!("{} = ", id));
                     }
-                    code.push_str(&format!("{}", transpile_instr(value)));
+                    code.push_str(&transpile_instr(value).to_string());
                     if !code.ends_with("\n") {
-                        code.push_str("\n");
+                        code.push('\n');
                     }
                 }
                 if block.result.kind != NoOp {
@@ -125,7 +124,7 @@ mod python {
             MethodCall(receiver, method, args) => {
                 let args = &args
                     .iter()
-                    .map(|x| transpile_instr(x))
+                    .map(transpile_instr)
                     .collect::<Vec<_>>()
                     .join(", ");
                 match method.as_ref() {
@@ -140,7 +139,7 @@ mod python {
             FnCall(func, args) => {
                 let args = &args
                     .iter()
-                    .map(|x| transpile_instr(x))
+                    .map(transpile_instr)
                     .collect::<Vec<_>>()
                     .join(", ");
                 format!("{}({})", transpile_fname(func), args)
@@ -184,20 +183,19 @@ mod rust {
                 "(".to_string()
                     + &fields
                         .iter()
-                        .map(|x| transpile_instr(x))
+                        .map(transpile_instr)
                         .collect::<Vec<_>>()
                         .join(", ")
                     + ")"
             }
             Assignment(variable, value) => format!("{} = {}", variable, transpile_instr(value)),
-            GetLocal(id) => id.to_string(),
             Block(block) => {
                 let mut code = "".to_string();
                 for (id, value) in &block.stmts {
                     if let Some((id, _mutable)) = id {
                         code.push_str(&format!("let {} = ", id));
                     }
-                    code.push_str(&format!("{}", transpile_instr(value)));
+                    code.push_str(&transpile_instr(value).to_string());
                     if !code.ends_with("\n") {
                         code.push_str(";\n");
                     }
@@ -235,13 +233,13 @@ mod rust {
                 code.push_str(&then);
                 code.push_str("} else {\n");
                 code.push_str(&els);
-                code.push_str("}");
+                code.push('}');
                 code
             }
             MethodCall(receiver, method, args) => {
                 let args = &args
                     .iter()
-                    .map(|x| transpile_instr(x))
+                    .map(transpile_instr)
                     .collect::<Vec<_>>()
                     .join(", ");
                 match method.as_ref() {
@@ -256,7 +254,7 @@ mod rust {
             FnCall(func, args) => {
                 let args_str = &args
                     .iter()
-                    .map(|x| transpile_instr(x))
+                    .map(transpile_instr)
                     .collect::<Vec<_>>()
                     .join(", ");
                 match func.as_ref() {
@@ -274,16 +272,12 @@ mod rust {
         match typ {
             Type::Tuple(_) => todo!(),
             Type::Array(element) => format!("List[{}]", transpile_type(element)),
-            Type::Name(name) => match name.as_ref() {
-                _ => format!("{}", name),
-            },
+            Type::Name(name) => format!("{}", name),
             Type::Void => "()".to_string(),
         }
     }
 
     pub fn transpile_fname(fname: &str) -> String {
-        match fname {
-            _ => fname.replace(':', "_"),
-        }
+        fname.replace(':', "_")
     }
 }

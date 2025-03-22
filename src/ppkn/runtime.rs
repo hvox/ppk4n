@@ -118,7 +118,7 @@ impl<'a> Runtime<'a> {
             .split_off(self.stack.len() - function.signature.results.len());
         let old_stack_top = self.bp;
         let frame_location = old_stack_top + function.locals.len();
-        self.function = self.stack[frame_location + 0] as usize;
+        self.function = self.stack[frame_location] as usize;
         self.bp = self.stack[frame_location + 1] as usize;
         let ip = self.stack[frame_location + 2] as usize;
         self.stack.truncate(old_stack_top);
@@ -647,12 +647,12 @@ impl<'a> Runtime<'a> {
                 }
                 F64Const(value) => {
                     let result = *value;
-                    self.stack.push(result.to_bits() as u64);
+                    self.stack.push(result.to_bits());
                 }
                 F64Load(offset) => {
                     let i: usize = self.stack.pop().unwrap() as usize + offset;
                     let result = f64::from_le_bytes(memory[i..i + 8].try_into().unwrap());
-                    self.stack.push(result.to_bits() as u64);
+                    self.stack.push(result.to_bits());
                 }
                 F64Store(offset) => {
                     let x: f64 = f64::from_bits(self.stack.pop().unwrap());
@@ -662,79 +662,79 @@ impl<'a> Runtime<'a> {
                 F64Abs => {
                     let x: f64 = f64::from_bits(self.stack.pop().unwrap());
                     let result = x.abs();
-                    self.stack.push(result.to_bits() as u64);
+                    self.stack.push(result.to_bits());
                 }
                 F64Ceil => {
                     let x: f64 = f64::from_bits(self.stack.pop().unwrap());
                     let result = x.ceil();
-                    self.stack.push(result.to_bits() as u64);
+                    self.stack.push(result.to_bits());
                 }
                 F64Floor => {
                     let x: f64 = f64::from_bits(self.stack.pop().unwrap());
                     let result = x.floor();
-                    self.stack.push(result.to_bits() as u64);
+                    self.stack.push(result.to_bits());
                 }
                 F64Nearest => {
                     let x: f64 = f64::from_bits(self.stack.pop().unwrap());
                     let result = x.round();
-                    self.stack.push(result.to_bits() as u64);
+                    self.stack.push(result.to_bits());
                 }
                 F64Neg => {
                     let x: f64 = f64::from_bits(self.stack.pop().unwrap());
                     let result = -x;
-                    self.stack.push(result.to_bits() as u64);
+                    self.stack.push(result.to_bits());
                 }
                 F64Sqrt => {
                     let x: f64 = f64::from_bits(self.stack.pop().unwrap());
                     let result = x.sqrt();
-                    self.stack.push(result.to_bits() as u64);
+                    self.stack.push(result.to_bits());
                 }
                 F64Trunc => {
                     let x: f64 = f64::from_bits(self.stack.pop().unwrap());
                     let result = x.trunc();
-                    self.stack.push(result.to_bits() as u64);
+                    self.stack.push(result.to_bits());
                 }
                 F64Copysign => {
                     let y: f64 = f64::from_bits(self.stack.pop().unwrap());
                     let x: f64 = f64::from_bits(self.stack.pop().unwrap());
                     let result = x.copysign(y);
-                    self.stack.push(result.to_bits() as u64);
+                    self.stack.push(result.to_bits());
                 }
                 F64Add => {
                     let y: f64 = f64::from_bits(self.stack.pop().unwrap());
                     let x: f64 = f64::from_bits(self.stack.pop().unwrap());
                     let result = x + y;
-                    self.stack.push(result.to_bits() as u64);
+                    self.stack.push(result.to_bits());
                 }
                 F64Div => {
                     let y: f64 = f64::from_bits(self.stack.pop().unwrap());
                     let x: f64 = f64::from_bits(self.stack.pop().unwrap());
                     let result = x / y;
-                    self.stack.push(result.to_bits() as u64);
+                    self.stack.push(result.to_bits());
                 }
                 F64Max => {
                     let y: f64 = f64::from_bits(self.stack.pop().unwrap());
                     let x: f64 = f64::from_bits(self.stack.pop().unwrap());
                     let result = x.max(y);
-                    self.stack.push(result.to_bits() as u64);
+                    self.stack.push(result.to_bits());
                 }
                 F64Min => {
                     let y: f64 = f64::from_bits(self.stack.pop().unwrap());
                     let x: f64 = f64::from_bits(self.stack.pop().unwrap());
                     let result = x.min(y);
-                    self.stack.push(result.to_bits() as u64);
+                    self.stack.push(result.to_bits());
                 }
                 F64Mul => {
                     let y: f64 = f64::from_bits(self.stack.pop().unwrap());
                     let x: f64 = f64::from_bits(self.stack.pop().unwrap());
                     let result = x * y;
-                    self.stack.push(result.to_bits() as u64);
+                    self.stack.push(result.to_bits());
                 }
                 F64Sub => {
                     let y: f64 = f64::from_bits(self.stack.pop().unwrap());
                     let x: f64 = f64::from_bits(self.stack.pop().unwrap());
                     let result = x - y;
-                    self.stack.push(result.to_bits() as u64);
+                    self.stack.push(result.to_bits());
                 }
                 F64Eq => {
                     let y: f64 = f64::from_bits(self.stack.pop().unwrap());

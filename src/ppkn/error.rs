@@ -1,5 +1,3 @@
-#![allow(unused)]
-
 use std::rc::Rc;
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -10,6 +8,7 @@ pub struct Error {
     pub kind: PpknErrorKind,
 }
 
+#[allow(clippy::enum_variant_names)]
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum PpknErrorKind {
     LoadError,
@@ -58,20 +57,6 @@ impl SyntaxError {
         let kind = PpknErrorKind::SyntaxError;
         Error {
             module,
-            cause_location,
-            message,
-            kind,
-        }
-    }
-}
-
-impl From<SyntaxError> for Error {
-    fn from(error: SyntaxError) -> Self {
-        let cause_location = error.cause_location;
-        let message = error.message.into();
-        let kind = PpknErrorKind::SyntaxError;
-        Self {
-            module: todo!(),
             cause_location,
             message,
             kind,

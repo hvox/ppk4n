@@ -56,7 +56,7 @@ fn main() {
             let Ok(program) = load_program(&args[2]) else {
                 return;
             };
-            fs::write(&args[3], &pack_data(&program.to_bytes())).unwrap();
+            fs::write(&args[3], pack_data(&program.to_bytes())).unwrap();
             #[cfg(target_family = "unix")]
             {
                 use std::os::unix::fs::PermissionsExt;
