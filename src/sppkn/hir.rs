@@ -715,9 +715,12 @@ impl<'a> BodyTypechecker<'a> {
 					};
 					(FnCall(path, args), result_type)
 				} else {
-					if !matches!(function.as_ref(), "print" | "println" | "eprint" | "eprintln") {
+					let typ = if !matches!(function.as_ref(), "print" | "println" | "eprint" | "eprintln") {
 						self.error(NameError, loc, "function not found in this scope".into());
-					}
+						typ
+					} else {
+						self.types.void
+					};
 					let args = args
 						.iter()
 						.map(|arg| {
