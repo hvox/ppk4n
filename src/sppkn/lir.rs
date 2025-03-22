@@ -331,7 +331,19 @@ impl<'a, 'p> FunctionCompiler<'a, 'p> {
 				self.compile_instr(&block.result, code);
 				self.locals.reset_shadowed(shadowed);
 			}
-			While(instr, instr1) => todo!(),
+			While(condition, body) => {
+				let mut inner_code = vec![];
+				self.compile_instr(condition, &mut inner_code);
+				inner_code.push(Op::U32Eqz);
+				inner_code.push(Op::BrIf(1));
+				self.compile_instr(body, &mut inner_code);
+				inner_code.push(Op::Br(0));
+				code.push(Op::Block(BlockType::Void, inner_code.len() + 2));
+				code.push(Op::Loop(BlockType::Void, inner_code.len()));
+				code.extend(inner_code);
+				code.push(Op::End);
+				code.push(Op::End);
+			}
 			If(condition, then, otherwise) => {
 				self.compile_instr(condition, code);
 				let typ = &self.function.body.types.realize(instr.typ);
@@ -351,7 +363,7 @@ impl<'a, 'p> FunctionCompiler<'a, 'p> {
 					code.push(Op::Else(else_code.len()));
 					code.extend(else_code);
 				}
-				code.push(Op::End);
+				code.push(Op::EndIf);
 			}
 			MethodCall(receiver, method, args) => {
 				let src = instr.location as usize;
@@ -369,7 +381,14 @@ impl<'a, 'p> FunctionCompiler<'a, 'p> {
 						("i32", "rem") => code.push(Op::I32Rem(src)),
 						("i32", "shl") => code.push(Op::I32Shl(src)),
 						("i32", "shr") => code.push(Op::I32Shr(src)),
+						("i32", "eqz") => code.push(Op::I32Eqz),
 						("i32", "eq") => code.push(Op::I32Eq),
+						("i32", "ge") => code.push(Op::I32Ge),
+						("i32", "gt") => code.push(Op::I32Gt),
+						("i32", "le") => code.push(Op::I32Le),
+						("i32", "lt") => code.push(Op::I32Lt),
+						("i32", "ne") => code.push(Op::I32Ne),
+
 						("u32", "add") => code.push(Op::U32Add(src)),
 						("u32", "sub") => code.push(Op::U32Sub(src)),
 						("u32", "mul") => code.push(Op::U32Mul(src)),
@@ -377,7 +396,14 @@ impl<'a, 'p> FunctionCompiler<'a, 'p> {
 						("u32", "rem") => code.push(Op::U32Rem(src)),
 						("u32", "shl") => code.push(Op::U32Shl(src)),
 						("u32", "shr") => code.push(Op::U32Shr(src)),
+						("u32", "eqz") => code.push(Op::I32Eqz),
 						("u32", "eq") => code.push(Op::U32Eq),
+						("u32", "ge") => code.push(Op::U32Ge),
+						("u32", "gt") => code.push(Op::U32Gt),
+						("u32", "le") => code.push(Op::U32Le),
+						("u32", "lt") => code.push(Op::U32Lt),
+						("u32", "ne") => code.push(Op::U32Ne),
+
 						("str", "add") => code.push(self.ctx.queue_function("std:str_add")),
 						x => todo!("{:?}", x),
 					},
@@ -488,6 +514,7 @@ pub enum Op {
 	IfThen(BlockType, usize),
 	Else(usize),
 	End,
+	EndIf,
 	Br(usize),
 	BrIf(usize),
 	JumpInto(Vec<usize>),

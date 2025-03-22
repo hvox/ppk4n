@@ -810,8 +810,8 @@ impl<'a> BodyTypechecker<'a> {
 		// eprintln!("{:?}", self.types.types);
 		let signature = match (&self.types[t], method) {
 			(Int(_) | Uint(_) | Float(_) | UnkInt | UnkFloat, "add" | "sub" | "mul" | "div") => vec![t, t],
-			(Int(_) | Uint(_) | UnkInt, "div_floor" | "rem_floor") => vec![t, t],
 			(Int(_) | Uint(_) | UnkInt | Bool, "bitadd" | "bitor" | "bitxor") => vec![t, t],
+			(Int(_) | Uint(_) | UnkInt, "div" | "rem") => vec![t, t],
 			(Str, "add") => vec![t, t],
 			(Str, "push") => vec![self.types.char, self.types.void],
 			(_, "eq" | "ne" | "lt" | "le" | "gt" | "ge") => vec![t, self.types.bool],

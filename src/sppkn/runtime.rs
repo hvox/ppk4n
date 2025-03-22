@@ -2,6 +2,8 @@
 
 use std::{collections::HashMap, fmt::Display};
 
+use crate::sppkn::lir::BlockType;
+
 use super::{
 	error::{Error, PpknErrorKind},
 	lir::{Bytecode, Func, Op},
@@ -64,7 +66,7 @@ impl<'a> Runtime<'a> {
 		for &global in &program.globals {
 			globals.push(global);
 		}
-		Runtime { program, function: 0xABEBA, objects, globals, stack: vec![0x54484520454e44], bp: 1 }
+		Runtime { program, function: 0xABEBA, objects, globals, stack: vec![], bp: 0 }
 	}
 
 	pub fn run(&mut self) -> Result<(), Error> {
@@ -140,38 +142,92 @@ impl<'a> Runtime<'a> {
 		let entry_function = self.program.functions.get_index_of(function).unwrap();
 		let mut function = &self.program.functions[entry_function];
 		let mut code = &function.code;
+		let mut jump_table = vec![];
+		let mut jump_bp = 0;
+		self.stack = vec![0; function.locals.len()];
 		self.function = entry_function;
 		// let code =
 		loop {
 			if LOGGING {
 				// eprint!("{:?} > ", self.stack);
 				// eprintln!("IP={:02} OP={:?}", ip, &code[ip]);
-				eprintln!("{:02} {:<13} \x1b[90m{:?}\x1b[0m", ip, format!("{:?}", &code[ip]), self.stack);
+				eprintln!(
+					"{}:{:02} {:<13} \x1b[90m{:?}\x1b[0m",
+					self.function,
+					ip,
+					format!("{:?}", &code[ip]),
+					&self.stack[self.bp..]
+				);
 			}
 			use Op::*;
 			match &code[ip] {
 				Unreachable => todo!(),
 				Nop => {}
-				Block(block_type, _) => todo!(),
-				Loop(block_type, _) => todo!(),
+				Block(typ, size) => {
+					assert!(*typ == BlockType::Void);
+					jump_table.push((false, ip + 1 + *size));
+					if LOGGING {
+						eprintln!("  JTABLE = {:?}", jump_table);
+					}
+				}
+				Loop(typ, size) => {
+					assert!(*typ == BlockType::Void);
+					_ = size;
+					jump_table.push((true, ip));
+					if LOGGING {
+						eprintln!("  JTABLE = {:?}", jump_table);
+					}
+				}
 				IfThen(_, size) => {
 					if self.stack.pop().unwrap() == 0 {
 						ip += size;
 					}
 				}
 				Else(size) => ip += size - 1,
+				EndIf => {}
 				End => {
-					if self.function == entry_function {
+					if jump_table.len() > jump_bp {
+						jump_table.pop();
+						if LOGGING {
+							eprintln!("  JTABLE = {:?}", jump_table);
+						}
+					} else if self.function == entry_function {
 						return Ok(());
 					} else {
+						jump_table.truncate(jump_bp);
+						jump_bp = jump_table.pop().unwrap().1;
 						(function, code, ip) = self.load_frame();
 					}
 				}
-				Br(_) => todo!(),
-				BrIf(_) => todo!(),
+				Br(label) => {
+					let loopy;
+					jump_table.truncate(jump_table.len() - *label);
+					(loopy, ip) = jump_table.pop().unwrap();
+					if loopy {
+						jump_table.push((loopy, ip));
+					}
+					if LOGGING {
+						eprintln!("  JTABLE = {:?}", jump_table);
+					}
+				}
+				BrIf(label) => {
+					if self.stack.pop().unwrap() != 0 {
+						let loopy;
+						jump_table.truncate(jump_table.len() - *label);
+						(loopy, ip) = jump_table.pop().unwrap();
+						if loopy {
+							jump_table.push((loopy, ip));
+						}
+						if LOGGING {
+							eprintln!("  JTABLE = {:?}", jump_table);
+						}
+					}
+				}
 				JumpInto(items) => todo!(),
 				Return => todo!(),
 				CallFunc(idx) => {
+					jump_table.push((false, jump_bp));
+					jump_bp = jump_table.len();
 					(function, code, ip) = self.save_frame(ip, *idx);
 					continue;
 				}
@@ -414,7 +470,7 @@ impl<'a> Runtime<'a> {
 				I32Eq => {
 					let y: i32 = self.stack.pop().unwrap() as i32;
 					let x: i32 = self.stack.pop().unwrap() as i32;
-					let result = x != y;
+					let result = x == y;
 					self.stack.push(result as u64);
 				}
 				I32Ge => {
@@ -541,7 +597,7 @@ impl<'a> Runtime<'a> {
 				U32Eq => {
 					let y: u32 = self.stack.pop().unwrap() as u32;
 					let x: u32 = self.stack.pop().unwrap() as u32;
-					let result = x != y;
+					let result = x == y;
 					self.stack.push(result as u64);
 				}
 				U32Ge => {
@@ -795,7 +851,7 @@ impl<'a> Runtime<'a> {
 				I64Eq => {
 					let y: i64 = self.stack.pop().unwrap() as i64;
 					let x: i64 = self.stack.pop().unwrap() as i64;
-					let result = x != y;
+					let result = x == y;
 					self.stack.push(result as u64);
 				}
 				I64Ge => {
@@ -922,7 +978,7 @@ impl<'a> Runtime<'a> {
 				U64Eq => {
 					let y: u64 = self.stack.pop().unwrap();
 					let x: u64 = self.stack.pop().unwrap();
-					let result = x != y;
+					let result = x == y;
 					self.stack.push(result as u64);
 				}
 				U64Ge => {

@@ -301,6 +301,13 @@ impl<'s> Parser<'s> {
 				};
 				return Ok((expr.into(), pos));
 			}
+			While => {
+				let (condition, pos) = self.parse_expr(position + 1)?;
+				let pos = self.try_parse_token(pos, Linend).unwrap_or(pos);
+				let (body, pos) = self.parse_expr(pos)?;
+				let expr = Expr { location: self.tokens[position].span(), kind: ExprKind::While(condition, body) };
+				return Ok((expr.into(), pos));
+			}
 			_ => return self.parse_arithmetic(position),
 		}
 	}
