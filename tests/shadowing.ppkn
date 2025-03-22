@@ -1,7 +1,0 @@
-fun main() {
-	x: int = 123
-	y: int = 321
-	println x + y # 444
-	x: int = x + y
-	println x - y # 123
-}

@@ -1,6 +1,0 @@
-fun main() {
-	aboba := []
-	aboba.push(123)
-	aboba.push(456)
-	println aboba # [123, 456]
-}
