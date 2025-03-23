@@ -1,10 +1,9 @@
 #![allow(clippy::ptr_arg, clippy::only_used_in_recursion)]
-pub mod error;
-pub mod hir;
 pub mod lexer;
-pub mod lir;
-pub mod loader;
 pub mod parser;
-pub mod runtime;
+pub mod hir;
 pub mod transpiler;
+pub mod lir;
 pub mod wasm;
+pub mod runtime;
+pub mod error;
