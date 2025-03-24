@@ -41,7 +41,7 @@ pub fn main() {
                 log(format!("Got request \"{}\"", method));
                 state.process_request(id, method, params);
             }
-            Message::Response { id, result } => {
+            Message::Response { id: _, result } => {
                 log(format!("Got response {:?}", result));
             }
             Message::Notification { method, params } => {
@@ -56,7 +56,7 @@ pub fn main() {
         while let Some(message) = state.queue.pop_back() {
             print!("{}", encode_message(message));
         }
-        stdout().flush();
+        _ = stdout().flush();
     }
 }
 
@@ -91,8 +91,8 @@ impl State {
                 log("We had nothing to do anyway, bye!");
                 self.send_response(id, JsonValue::Null);
             }
-            unknown => {
-                log(format!("unknown method {:?}", method));
+            unknown_method => {
+                log(format!("unknown method {:?}", unknown_method));
             }
         }
     }
@@ -111,8 +111,8 @@ impl State {
                 self.update_source(uri, text);
             }
             "textDocument/didSave" => {}
-            unknown => {
-                log(format!("unknown method {:?}", method));
+            unknown_method => {
+                log(format!("unknown method {:?}", unknown_method));
             }
         }
     }
@@ -178,56 +178,8 @@ enum Message {
     Notification { method: String, params: JsonValue },
 }
 
-fn parse_message(message: impl AsRef<str>) -> Message {
-    // TODO: less clones
-    let message: JsonValue = message.as_ref().parse().unwrap();
-    let message: &HashMap<String, JsonValue> = message.get().unwrap();
-    if let Some(params) = message.get("params") {
-        let method: String = message["method"].get().cloned().unwrap();
-        if let Some(id) = message.get("id") {
-            Message::Request { id: id.clone(), method, params: params.clone() }
-        } else {
-            Message::Notification { method, params: params.clone() }
-        }
-    } else {
-        log(format!("{:?}", message.clone()));
-        let id = message["id"].clone();
-        let result = message["result"].clone();
-        Message::Response { id, result }
-    }
-}
-
-fn decode_request(message: impl AsRef<str>) -> (i32, String, HashMap<String, JsonValue>) {
-    let message: JsonValue = message.as_ref().parse().unwrap();
-    let id = *message["id"].get::<f64>().unwrap() as i32;
-    let method = message["method"].get::<String>().unwrap().to_owned();
-    let params = message["params"].clone();
-    log(format!("Got message {}", method));
-    (id, method, params.get().cloned().unwrap())
-}
-
-fn encode_response(id: JsonValue, result: JsonValue) -> String {
-    let json = JsonValue::Object(HashMap::from([
-        ("jsonrpc".into(), JsonValue::String("2.0".into())),
-        ("id".into(), id),
-        ("result".into(), result.clone()),
-    ]));
-    let message = json.stringify().unwrap();
-    log("Send ".to_string() + &result.stringify().unwrap());
-    format!("Content-Length: {}\r\n\r\n{}", message.len(), message)
-}
-
-fn encode_json_message(json: JsonValue) -> String {
-    let message = stringify(json);
-    format!("Content-Length: {}\r\n\r\n{}", message.len(), message)
-}
-
 fn find(haystack: &[u8], needle: &[u8]) -> Option<usize> {
     haystack.windows(needle.len()).position(|window| window == needle)
-}
-
-fn stringify(json: JsonValue) -> String {
-    json.stringify().unwrap()
 }
 
 fn log(message: impl AsRef<str>) {
