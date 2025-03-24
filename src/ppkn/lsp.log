@@ -1,0 +1,9 @@
+  0: LSP START
+843: Got request "initialize"
+875: Connected to {"version":"0.11.0-dev+gc47496791a","name":"Neovim"}
+24580: Got notification "initialized"
+24605: unknown method "initialized"
+3327723: Got request "shutdown"
+3327754: We had nothing to do anyway, bye!
+3344396: Got notification "exit"
+3344433: LSP STOP

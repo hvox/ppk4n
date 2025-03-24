@@ -11,7 +11,7 @@ pub struct Error {
 #[allow(clippy::enum_variant_names)]
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum PpknErrorKind {
-    LoadError,
+    // LoadError, TODO
     SyntaxError,
     TypeError,
     NameError,
@@ -25,21 +25,6 @@ pub struct SyntaxError {
 }
 
 type Str = Rc<str>;
-
-impl Error {
-    pub fn new<S>(module: S, location: (u32, u32), kind: PpknErrorKind, message: String) -> Self
-    where
-        S: Into<Str>,
-    {
-        let module = module.into();
-        Self {
-            module,
-            cause_location: location,
-            message,
-            kind,
-        }
-    }
-}
 
 impl SyntaxError {
     pub fn new(location: (u32, u32), message: &'static str) -> Self {

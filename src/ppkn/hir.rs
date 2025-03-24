@@ -900,3 +900,9 @@ impl<'a> BodyTypechecker<'a> {
         // self.program.modules[&self.module].poisoned = true;
     }
 }
+
+impl Default for Program {
+    fn default() -> Self {
+		Program::new(std::env::current_dir().unwrap(), HashMap::new(), "main".into())
+    }
+}

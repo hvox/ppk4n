@@ -8,6 +8,7 @@ use std::rc::Rc;
 
 use ppkn::hir::Program;
 
+mod lsp;
 mod ppkn;
 
 fn main() {
@@ -27,6 +28,10 @@ fn main() {
         return;
     }
     match args[1].as_str() {
+        "lsp" => {
+            use lsp;
+            lsp::main();
+        }
         "into-python" => {
             let Ok(program) = load_program(&args[2]) else {
                 return;
