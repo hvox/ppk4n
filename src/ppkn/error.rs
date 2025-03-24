@@ -28,10 +28,7 @@ type Str = Rc<str>;
 
 impl SyntaxError {
     pub fn new(location: (u32, u32), message: &'static str) -> Self {
-        Self {
-            cause_location: location,
-            message,
-        }
+        Self { cause_location: location, message }
     }
 }
 
@@ -40,11 +37,6 @@ impl SyntaxError {
         let cause_location = self.cause_location;
         let message = self.message.into();
         let kind = PpknErrorKind::SyntaxError;
-        Error {
-            module,
-            cause_location,
-            message,
-            kind,
-        }
+        Error { module, cause_location, message, kind }
     }
 }

@@ -76,11 +76,7 @@ mod python {
             Identifier(id) => id.to_string(),
             Tuple(fields) => {
                 "(".to_string()
-                    + &fields
-                        .iter()
-                        .map(transpile_instr)
-                        .collect::<Vec<_>>()
-                        .join(", ")
+                    + &fields.iter().map(transpile_instr).collect::<Vec<_>>().join(", ")
                     + ")"
             }
             Assignment(variable, value) => format!("{} = {}", variable, transpile_instr(value)),
@@ -122,11 +118,7 @@ mod python {
                 format!("if {}:\n{}else:\n{}", transpile_instr(condition), then, els)
             }
             MethodCall(receiver, method, args) => {
-                let args = &args
-                    .iter()
-                    .map(transpile_instr)
-                    .collect::<Vec<_>>()
-                    .join(", ");
+                let args = &args.iter().map(transpile_instr).collect::<Vec<_>>().join(", ");
                 match method.as_ref() {
                     "add" => format!("{} + {}", transpile_instr(receiver), args),
                     "sub" => format!("{} - {}", transpile_instr(receiver), args),
@@ -137,11 +129,7 @@ mod python {
                 }
             }
             FnCall(func, args) => {
-                let args = &args
-                    .iter()
-                    .map(transpile_instr)
-                    .collect::<Vec<_>>()
-                    .join(", ");
+                let args = &args.iter().map(transpile_instr).collect::<Vec<_>>().join(", ");
                 format!("{}({})", transpile_fname(func), args)
             }
             Return(value) => format!("return {}", transpile_instr(value)),
@@ -181,11 +169,7 @@ mod rust {
             Identifier(id) => id.to_string(),
             Tuple(fields) => {
                 "(".to_string()
-                    + &fields
-                        .iter()
-                        .map(transpile_instr)
-                        .collect::<Vec<_>>()
-                        .join(", ")
+                    + &fields.iter().map(transpile_instr).collect::<Vec<_>>().join(", ")
                     + ")"
             }
             Assignment(variable, value) => format!("{} = {}", variable, transpile_instr(value)),
@@ -237,11 +221,7 @@ mod rust {
                 code
             }
             MethodCall(receiver, method, args) => {
-                let args = &args
-                    .iter()
-                    .map(transpile_instr)
-                    .collect::<Vec<_>>()
-                    .join(", ");
+                let args = &args.iter().map(transpile_instr).collect::<Vec<_>>().join(", ");
                 match method.as_ref() {
                     "add" => format!("{} + {}", transpile_instr(receiver), args),
                     "sub" => format!("{} - {}", transpile_instr(receiver), args),
@@ -252,11 +232,7 @@ mod rust {
                 }
             }
             FnCall(func, args) => {
-                let args_str = &args
-                    .iter()
-                    .map(transpile_instr)
-                    .collect::<Vec<_>>()
-                    .join(", ");
+                let args_str = &args.iter().map(transpile_instr).collect::<Vec<_>>().join(", ");
                 match func.as_ref() {
                     "println" => format!("println!(\"{}\", {})", "{}".repeat(args.len()), args_str),
                     _ => format!("{}({})", transpile_fname(func), args_str),

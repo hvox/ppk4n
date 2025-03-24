@@ -1,9 +1,8 @@
-#![allow(unused)]
+// #![allow(unused)]
 use super::ppkn::hir::Program;
 use std::collections::{HashMap, VecDeque};
-use std::fs::{self, OpenOptions};
+use std::fs::OpenOptions;
 use std::io::{stdin, stdout, Read, Write};
-use std::path::PathBuf;
 use std::time::Instant;
 use tinyjson::JsonValue;
 
@@ -122,11 +121,11 @@ impl State {
         let Some(path) = uri.strip_prefix("file://") else { return };
         let module = path.split("/").last().unwrap().split_once(".").unwrap().0;
         self.project.sources.insert(module.into(), content.into());
-		self.project = Program::default();
+        self.project = Program::default();
         if let Err(errors) = self.project.load_and_typecheck(module.into()) {
             log(format!("{:?}", errors));
         }
-		log(format!("{:?}", self.project.functions.keys().collect::<Vec<_>>()))
+        log(format!("{:?}", self.project.functions.keys().collect::<Vec<_>>()))
     }
 
     fn send_response(&mut self, id: JsonValue, result: JsonValue) {
@@ -155,7 +154,7 @@ fn read_message(message: impl AsRef<str>) -> Message {
 }
 
 fn encode_message(message: Message) -> String {
-    let mut message = match message {
+    let message = match message {
         Message::Request { id, method, params } => HashMap::from([
             ("id".into(), id),
             ("method".into(), method.into()),

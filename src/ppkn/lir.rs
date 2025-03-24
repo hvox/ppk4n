@@ -103,12 +103,7 @@ impl<'a> ProgramCompiler<'a> {
             data: Vec::new(),
         };
         // program.functions.iter().for_each(|(f, _)| eprintln!("{}", f));
-        let mut compiler = ProgramCompiler {
-            program,
-            lir,
-            queue,
-            globals: Variables::default(),
-        };
+        let mut compiler = ProgramCompiler { program, lir, queue, globals: Variables::default() };
         compiler.queue_function(&main);
         compiler
     }
@@ -141,16 +136,10 @@ impl<'a> ProgramCompiler<'a> {
                 let typ = self.process_type(typ);
                 parameters.extend(&typ);
             }
-            let signature = FuncType {
-                parameters,
-                results: self.process_type(&import.result),
-            };
+            let signature = FuncType { parameters, results: self.process_type(&import.result) };
             let (namespace, func_name) = fname.split_once(':').unwrap();
-            let import = Import {
-                signature,
-                namespace: namespace.into(),
-                func_name: func_name.into(),
-            };
+            let import =
+                Import { signature, namespace: namespace.into(), func_name: func_name.into() };
             let (idx, _) = self.lir.imports.insert_full(fname.into(), import);
             return Op::CallImport(idx);
         } else {
@@ -172,9 +161,7 @@ impl<'a> ProgramCompiler<'a> {
             .as_ref()
             .map(|expr| self.process_const_expr(expr))
             .unwrap_or_else(|| vec![0; layout.len()]);
-        self.lir
-            .globals
-            .resize(self.lir.globals.len() + layout.len(), 0);
+        self.lir.globals.resize(self.lir.globals.len() + layout.len(), 0);
         for (&i, value) in layout.iter().zip(values) {
             self.lir.globals[i] = value;
         }
@@ -211,12 +198,7 @@ impl<'a> ProgramCompiler<'a> {
                 "i64" | "u64" => vec![ValueType::I64],
                 "f32" => vec![ValueType::F32],
                 "f64" => vec![ValueType::F64],
-                typ if self
-                    .program
-                    .types
-                    .get(typ)
-                    .is_some_and(|t| *t == NamedType::Foreign) =>
-                {
+                typ if self.program.types.get(typ).is_some_and(|t| *t == NamedType::Foreign) => {
                     vec![ValueType::ExternRef]
                 }
                 _ => todo!("Type {}", typ),
@@ -278,12 +260,7 @@ struct FunctionCompiler<'c, 'p> {
 impl<'a, 'p> FunctionCompiler<'a, 'p> {
     fn new(ctx: &'a mut ProgramCompiler<'p>, function: &'p Function) -> Self {
         let results = ctx.process_type(&function.result);
-        Self {
-            ctx,
-            locals: Variables::default(),
-            results,
-            function,
-        }
+        Self { ctx, locals: Variables::default(), results, function }
     }
 
     fn compile(mut self) -> Func {
@@ -297,16 +274,8 @@ impl<'a, 'p> FunctionCompiler<'a, 'p> {
         self.compile_instr(&self.function.body.value, &mut code);
         code.push(Op::End);
         let locals = self.locals.valtypes;
-        let signature = FuncType {
-            parameters,
-            results: self.results,
-        };
-        Func {
-            module: self.function.module.clone(),
-            signature,
-            locals,
-            code,
-        }
+        let signature = FuncType { parameters, results: self.results };
+        Func { module: self.function.module.clone(), signature, locals, code }
     }
 
     fn compile_instr(&mut self, instr: &Instr, code: &mut Vec<Op>) {
@@ -334,16 +303,10 @@ impl<'a, 'p> FunctionCompiler<'a, 'p> {
             Assignment(name, instr) => {
                 self.compile_instr(instr, code);
                 if let Some(layout) = self.locals.find(name) {
-                    layout
-                        .iter()
-                        .rev()
-                        .for_each(|&x| code.push(Op::LocalSet(x)));
+                    layout.iter().rev().for_each(|&x| code.push(Op::LocalSet(x)));
                 } else {
                     let layout = self.ctx.globals.find(name).unwrap();
-                    layout
-                        .iter()
-                        .rev()
-                        .for_each(|&x| code.push(Op::GlobalSet(x)));
+                    layout.iter().rev().for_each(|&x| code.push(Op::GlobalSet(x)));
                 };
             }
             Identifier(name) => {
@@ -360,9 +323,7 @@ impl<'a, 'p> FunctionCompiler<'a, 'p> {
                     self.compile_instr(instr, code);
                     let typ = self.function.body.types.realize(instr.typ);
                     if let Some((name, _mutable)) = target {
-                        let layout = self
-                            .locals
-                            .insert(name.clone(), self.ctx.process_type(&typ));
+                        let layout = self.locals.insert(name.clone(), self.ctx.process_type(&typ));
                         layout.iter().for_each(|&x| code.push(Op::LocalSet(x)));
                     } else {
                         self.compile_drop(&typ, code);
@@ -392,10 +353,8 @@ impl<'a, 'p> FunctionCompiler<'a, 'p> {
                     0 => BlockType::Void,
                     1 => BlockType::ValueType(valuetype[0]),
                     _ => {
-                        let functype = FuncType {
-                            parameters: Vec::new(),
-                            results: valuetype.clone(),
-                        };
+                        let functype =
+                            FuncType { parameters: Vec::new(), results: valuetype.clone() };
                         let (index, _) = self.ctx.lir.types.insert_full(functype);
                         BlockType::TypeIndex(index)
                     }

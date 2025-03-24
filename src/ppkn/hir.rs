@@ -156,17 +156,7 @@ impl Program {
             sources.insert("std".into(), std_source.into());
         }
 
-        Self {
-            poisoned: false,
-            main,
-            root,
-            sources,
-            modules,
-            globals,
-            functions,
-            types,
-            imports,
-        }
+        Self { poisoned: false, main, root, sources, modules, globals, functions, types, imports }
     }
 
     pub fn load_and_typecheck(&mut self, name: Str) -> Result<(), Vec<Error>> {
@@ -188,10 +178,7 @@ impl Program {
     }
 
     pub fn load(&mut self, name: Str) -> (Vec<Str>, Vec<Error>) {
-        let mut parse_queue = vec![
-            (name.clone(), "".into(), (0, 0)),
-            ("std".into(), name, (0, 0)),
-        ];
+        let mut parse_queue = vec![(name.clone(), "".into(), (0, 0)), ("std".into(), name, (0, 0))];
         let mut parsed = vec![];
         let mut errors = vec![];
         while let Some((name, dependent, _location)) = parse_queue.pop() {
@@ -211,20 +198,12 @@ impl Program {
                 }
             };
             let (ast, syntax_errors) = super::parser::parse(&source);
-            errors.extend(
-                syntax_errors
-                    .into_iter()
-                    .map(|error| error.into_error(name.clone())),
-            );
+            errors.extend(syntax_errors.into_iter().map(|error| error.into_error(name.clone())));
             for dependency in &ast.dependencies {
                 parse_queue.push((dependency.name.clone(), name.clone(), dependency.location));
             }
-            let module = Module {
-                name: name.clone(),
-                ast,
-                dependents: vec![dependent],
-                poisoned: false,
-            };
+            let module =
+                Module { name: name.clone(), ast, dependents: vec![dependent], poisoned: false };
             self.modules.insert(name.clone(), module);
             parsed.push(name);
         }
@@ -248,12 +227,8 @@ impl Program {
                 .map(|x| (x.name.clone(), self.resolve_typename(module_name, &x.typ)))
                 .collect();
             let result = self.resolve_typename(module_name, &function.result);
-            let signature = FunctionSignature {
-                module: module_name.into(),
-                name,
-                parameters: params,
-                result,
-            };
+            let signature =
+                FunctionSignature { module: module_name.into(), name, parameters: params, result };
             self.imports.insert(fname.clone(), signature);
         }
         for (_, global) in &ast.globals {
@@ -328,21 +303,13 @@ impl Program {
 
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut bytes = vec![];
-        bytes
-            .write_all(&(self.main.len() as u32).to_le_bytes())
-            .unwrap();
+        bytes.write_all(&(self.main.len() as u32).to_le_bytes()).unwrap();
         bytes.write_all(self.main.as_bytes()).unwrap();
-        bytes
-            .write_all(&(self.sources.len() as u32).to_le_bytes())
-            .unwrap();
+        bytes.write_all(&(self.sources.len() as u32).to_le_bytes()).unwrap();
         for (module, source) in &self.sources {
-            bytes
-                .write_all(&(module.len() as u32).to_le_bytes())
-                .unwrap();
+            bytes.write_all(&(module.len() as u32).to_le_bytes()).unwrap();
             bytes.write_all(module.as_bytes()).unwrap();
-            bytes
-                .write_all(&(source.len() as u32).to_le_bytes())
-                .unwrap();
+            bytes.write_all(&(source.len() as u32).to_le_bytes()).unwrap();
             bytes.write_all(source.as_bytes()).unwrap();
         }
         bytes
@@ -439,8 +406,7 @@ impl Types {
             (UnkFloat, Float(x)) => Float(x),
             (Tuple(xs), Tuple(ys)) if xs.len() == ys.len() => {
                 for (x, y) in xs.iter().zip(&ys) {
-                    self.unify(*x, *y)
-                        .map_err(|_| (Tuple(xs.clone()), Tuple(ys.clone())))?;
+                    self.unify(*x, *y).map_err(|_| (Tuple(xs.clone()), Tuple(ys.clone())))?;
                 }
                 Tuple(xs)
             }
@@ -527,25 +493,12 @@ impl<'a> BodyTypechecker<'a> {
             }
             locals
         };
-        Self {
-            program,
-            module: module.into(),
-            result,
-            locals,
-            types,
-            errors: vec![],
-        }
+        Self { program, module: module.into(), result, locals, types, errors: vec![] }
     }
 
     fn typecheck_body(mut self, expr: &Expr) -> (Body, Vec<Error>) {
         let instr = self.typecheck(expr, self.result);
-        (
-            Body {
-                types: self.types,
-                value: instr,
-            },
-            self.errors,
-        )
+        (Body { types: self.types, value: instr }, self.errors)
     }
 
     fn typecheck(&mut self, expr: &Expr, typ: TypeId) -> Instr {
@@ -553,10 +506,9 @@ impl<'a> BodyTypechecker<'a> {
         let loc = expr.location;
         let (kind, actual_type) = match &expr.kind {
             ExprKind::String(string) => (String(string.clone()), self.types.string),
-            ExprKind::Integer(integer) => (
-                Integer(integer.clone()),
-                self.types.insert(InferredType::UnkInt),
-            ),
+            ExprKind::Integer(integer) => {
+                (Integer(integer.clone()), self.types.insert(InferredType::UnkInt))
+            }
             ExprKind::Identifier(name) => {
                 let (path, typ) = self.vartype(loc, name.clone());
                 (Identifier(path), typ)
@@ -604,19 +556,13 @@ impl<'a> BodyTypechecker<'a> {
                     let result_type = signature.pop().unwrap();
                     let params = signature;
                     if params.len() == args.len() {
-                        let args = args
-                            .iter()
-                            .zip(params)
-                            .map(|(x, t)| self.typecheck(x, t))
-                            .collect();
+                        let args =
+                            args.iter().zip(params).map(|(x, t)| self.typecheck(x, t)).collect();
                         // let mut checked_args = vec![];
                         // for (arg, typ) in args.iter().zip(params) {
                         //     checked_args.push(self.typecheck(arg, typ));
                         // }
-                        (
-                            MethodCall(receiver.into(), method.clone(), args),
-                            result_type,
-                        )
+                        (MethodCall(receiver.into(), method.clone(), args), result_type)
                     } else {
                         let error_message = format!(
                             "this method takes {} arguments but {} were given",
@@ -632,10 +578,7 @@ impl<'a> BodyTypechecker<'a> {
                                 self.typecheck(arg, typ)
                             })
                             .collect();
-                        (
-                            MethodCall(receiver.into(), method.clone(), args),
-                            result_type,
-                        )
+                        (MethodCall(receiver.into(), method.clone(), args), result_type)
                     }
                 } else {
                     self.error(
@@ -656,10 +599,7 @@ impl<'a> BodyTypechecker<'a> {
             ExprKind::FnCall(function, args) => {
                 if let Ok((path, params, result_type)) = self.resolve_function(function) {
                     let args = if params.len() == args.len() {
-                        args.iter()
-                            .zip(params)
-                            .map(|(x, t)| self.typecheck(x, t))
-                            .collect()
+                        args.iter().zip(params).map(|(x, t)| self.typecheck(x, t)).collect()
                     } else {
                         let error_message = format!(
                             "expected {} arguments but {} were given",
@@ -702,11 +642,7 @@ impl<'a> BodyTypechecker<'a> {
         if typ != actual_type {
             self.unify(expr.location, typ, actual_type);
         }
-        Instr {
-            location: expr.location.0,
-            typ,
-            kind,
-        }
+        Instr { location: expr.location.0, typ, kind }
     }
 
     fn typecheck_block(&mut self, block: &Indented, result: TypeId) -> Block {
@@ -733,11 +669,7 @@ impl<'a> BodyTypechecker<'a> {
             }
         }
         let result = if self.types[result] == InferredType::Void {
-            Instr {
-                location: block.location.0,
-                typ: self.types.void,
-                kind: InstrKind::NoOp,
-            }
+            Instr { location: block.location.0, typ: self.types.void, kind: InstrKind::NoOp }
         } else if let Some(stmt) = block.stmts.last() {
             match stmt {
                 Stmt::Expression(expr) => self.typecheck(expr, result),
@@ -748,20 +680,12 @@ impl<'a> BodyTypechecker<'a> {
                     let expr = self.typecheck(&vardef.value.clone().unwrap(), typ);
                     stmts.push((Some((name, vardef.mutable)), expr));
                     self.unify(vardef.location, result, self.types.void);
-                    Instr {
-                        location,
-                        typ: self.types.void,
-                        kind: InstrKind::NoOp,
-                    }
+                    Instr { location, typ: self.types.void, kind: InstrKind::NoOp }
                 }
             }
         } else {
             self.unify(block.location, result, self.types.void);
-            Instr {
-                location: block.location.0,
-                typ: self.types.void,
-                kind: InstrKind::NoOp,
-            }
+            Instr { location: block.location.0, typ: self.types.void, kind: InstrKind::NoOp }
         };
         self.locals.truncate(locals_count);
         Block { stmts, result }
@@ -773,34 +697,22 @@ impl<'a> BodyTypechecker<'a> {
         } else {
             (&self.module[..], function)
         };
-        let Some(f) = &self
-            .program
-            .modules
-            .get(module)
-            .and_then(|m| m.ast.functions.get(fname))
+        let Some(f) = &self.program.modules.get(module).and_then(|m| m.ast.functions.get(fname))
         else {
             let Some(signature) = &self.program.imports.get(function) else {
                 return Err(());
             };
-            let params = signature
-                .parameters
-                .iter()
-                .map(|x| self.types.insert_specified(&x.1))
-                .collect();
+            let params =
+                signature.parameters.iter().map(|x| self.types.insert_specified(&x.1)).collect();
             let result = self.types.insert_specified(&signature.result);
             return Ok((function.into(), params, result));
         };
         let params = f
             .params
             .iter()
-            .map(|x| {
-                self.types
-                    .insert_specified(&self.program.resolve_typename(module, &x.typ))
-            })
+            .map(|x| self.types.insert_specified(&self.program.resolve_typename(module, &x.typ)))
             .collect();
-        let result = self
-            .types
-            .insert_specified(&self.program.resolve_typename(module, &f.result));
+        let result = self.types.insert_specified(&self.program.resolve_typename(module, &f.result));
         let path = format!("{}:{}", module, fname).into();
         Ok((path, params, result))
     }
@@ -903,6 +815,6 @@ impl<'a> BodyTypechecker<'a> {
 
 impl Default for Program {
     fn default() -> Self {
-		Program::new(std::env::current_dir().unwrap(), HashMap::new(), "main".into())
+        Program::new(std::env::current_dir().unwrap(), HashMap::new(), "main".into())
     }
 }

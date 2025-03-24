@@ -37,9 +37,7 @@ enum Object {
 
 impl Objects {
     fn new() -> Self {
-        Self {
-            values: vec![Object::String("".into())],
-        }
+        Self { values: vec![Object::String("".into())] }
     }
 
     fn insert(&mut self, object: Object) -> u64 {
@@ -68,14 +66,7 @@ impl<'a> Runtime<'a> {
         for &global in &program.globals {
             globals.push(global);
         }
-        Runtime {
-            program,
-            function: 0xABEBA,
-            objects,
-            globals,
-            stack: vec![],
-            bp: 0,
-        }
+        Runtime { program, function: 0xABEBA, objects, globals, stack: vec![], bp: 0 }
     }
 
     pub fn run(&mut self) -> Result<(), Error> {
@@ -98,11 +89,7 @@ impl<'a> Runtime<'a> {
         let function = &self.program.functions[func];
         let old_bp = self.bp;
         self.bp = self.stack.len() - function.signature.parameters.len();
-        self.stack.extend(vec![
-            0;
-            function.locals.len()
-                - function.signature.parameters.len()
-        ]);
+        self.stack.extend(vec![0; function.locals.len() - function.signature.parameters.len()]);
         self.stack.push(self.function as u64);
         self.stack.push(old_bp as u64);
         self.stack.push(ip as u64);
@@ -113,9 +100,7 @@ impl<'a> Runtime<'a> {
 
     fn load_frame(&mut self) -> (&'a Func, &'a Vec<Op>, usize) {
         let function = &self.program.functions[self.function];
-        let results = self
-            .stack
-            .split_off(self.stack.len() - function.signature.results.len());
+        let results = self.stack.split_off(self.stack.len() - function.signature.results.len());
         let old_stack_top = self.bp;
         let frame_location = old_stack_top + function.locals.len();
         self.function = self.stack[frame_location] as usize;

@@ -129,12 +129,7 @@ const DIE_ON_FIRST_ERROR_REPORT: bool = false;
 impl<'s> Parser<'s> {
     fn new(source: &'s str) -> Self {
         let tokens = tokenize(source);
-        Self {
-            source,
-            tokens,
-            errors: vec![],
-            cache: HashMap::new(),
-        }
+        Self { source, tokens, errors: vec![], cache: HashMap::new() }
     }
 
     fn parse(mut self) -> (Ast, Vec<SyntaxError>) {
@@ -171,10 +166,8 @@ impl<'s> Parser<'s> {
                 }
                 Use => {
                     if let Ok((name, pos)) = self.try_parse_identifier(position + 1) {
-                        dependencies.push(Dependency {
-                            location: self.tokens[position + 1].span(),
-                            name,
-                        });
+                        dependencies
+                            .push(Dependency { location: self.tokens[position + 1].span(), name });
                         position = pos;
                     } else {
                         self.error(position + 1, "Expected module name");
@@ -238,43 +231,19 @@ impl<'s> Parser<'s> {
                     pos,
                 )
             });
-            params.push(FunParameter {
-                location: param_pos,
-                name: "".into(),
-                typ,
-            });
-            param_pos = self
-                .try_parse_token(pos, Comma)
-                .unwrap_or(pos)
-                .max(param_pos + 1);
+            params.push(FunParameter { location: param_pos, name: "".into(), typ });
+            param_pos = self.try_parse_token(pos, Comma).unwrap_or(pos).max(param_pos + 1);
         }
         let pos = self.parse_token_soft(param_pos, RightParen);
         let (result, pos) = if let Ok(pos) = self.try_parse_token(pos, RightArrow) {
             self.parse_typename(pos).unwrap_or_else(|_| {
-                (
-                    Typename {
-                        location: self.tokens[pos].span(),
-                        kind: TypenameKind::Void,
-                    },
-                    pos,
-                )
+                (Typename { location: self.tokens[pos].span(), kind: TypenameKind::Void }, pos)
             })
         } else {
-            (
-                Typename {
-                    location: self.tokens[pos].span(),
-                    kind: TypenameKind::Void,
-                },
-                pos,
-            )
+            (Typename { location: self.tokens[pos].span(), kind: TypenameKind::Void }, pos)
         };
         let location = self.tokens[position].span();
-        let signature = FunSignature {
-            location,
-            name,
-            params,
-            result,
-        };
+        let signature = FunSignature { location, name, params, result };
         (signature, pos)
     }
 
@@ -288,34 +257,18 @@ impl<'s> Parser<'s> {
         while let Ok((name, pos)) = self.try_parse_identifier(param_pos) {
             let pos = self.parse_token(pos, Colon)?;
             let (typ, pos) = self.parse_typename(pos)?;
-            params.push(FunParameter {
-                location: param_pos,
-                name,
-                typ,
-            });
+            params.push(FunParameter { location: param_pos, name, typ });
             param_pos = self.try_parse_token(pos, Comma).unwrap_or(pos);
         }
         let pos = self.parse_token(param_pos, RightParen)?;
         let (result, pos) = if let Ok(pos) = self.try_parse_token(pos, RightArrow) {
             self.parse_typename(pos)?
         } else {
-            (
-                Typename {
-                    location: self.tokens[pos].span(),
-                    kind: TypenameKind::Void,
-                },
-                pos,
-            )
+            (Typename { location: self.tokens[pos].span(), kind: TypenameKind::Void }, pos)
         };
         let pos = self.try_parse_token(pos, Linend).unwrap_or(pos);
         let (body, pos) = self.parse_expr(pos)?;
-        let function = FunDef {
-            location: position,
-            name,
-            params,
-            result,
-            body,
-        };
+        let function = FunDef { location: position, name, params, result, body };
         Ok((function, pos))
     }
 
@@ -330,17 +283,11 @@ impl<'s> Parser<'s> {
                 let (els, pos) = if let Ok(pos) = self.try_parse_token(pos, Else) {
                     self.parse_expr(pos)?
                 } else {
-                    let expr = Expr {
-                        location: then.location,
-                        kind: ExprKind::Nothing,
-                    };
+                    let expr = Expr { location: then.location, kind: ExprKind::Nothing };
                     (expr.into(), pos)
                 };
                 let expr = Expr {
-                    location: (
-                        self.tokens[position].span().0,
-                        self.tokens[pos - 1].span().1,
-                    ),
+                    location: (self.tokens[position].span().0, self.tokens[pos - 1].span().1),
                     kind: ExprKind::If(condition, then, els),
                 };
                 Ok((expr.into(), pos))
@@ -357,10 +304,8 @@ impl<'s> Parser<'s> {
             }
             Return => {
                 let (result, pos) = self.parse_expr(position + 1)?;
-                let expr = Expr {
-                    location: self.tokens[position].span(),
-                    kind: ExprKind::Return(result),
-                };
+                let expr =
+                    Expr { location: self.tokens[position].span(), kind: ExprKind::Return(result) };
                 Ok((expr.into(), pos))
             }
             _ => self.parse_arithmetic(position),
@@ -393,9 +338,7 @@ impl<'s> Parser<'s> {
         let mut ops: Vec<Token> = vec![];
         let mut args = vec![expr];
         while args.len() != 1 || precedence(self.tokens[pos].kind) > 0 {
-            if ops
-                .last()
-                .is_some_and(|op| precedence(op.kind) >= precedence(self.tokens[pos].kind))
+            if ops.last().is_some_and(|op| precedence(op.kind) >= precedence(self.tokens[pos].kind))
             {
                 let op = ops.pop().unwrap();
                 let y = args.pop().unwrap();
@@ -443,10 +386,7 @@ impl<'s> Parser<'s> {
                             _ => todo!(),
                         };
                         let kind = ExprKind::Assignment(name.clone(), y);
-                        let z = Expr {
-                            location: x.location,
-                            kind,
-                        };
+                        let z = Expr { location: x.location, kind };
                         args.push(Rc::new(z));
                         continue;
                     }
@@ -457,10 +397,7 @@ impl<'s> Parser<'s> {
                             }
                             _ => todo!(),
                         };
-                        let z = Expr {
-                            location: x.location,
-                            kind,
-                        };
+                        let z = Expr { location: x.location, kind };
                         args.push(Rc::new(z));
                         continue;
                     }
@@ -496,10 +433,7 @@ impl<'s> Parser<'s> {
             LeftParen => {
                 if self.tokens[position + 1].kind == RightParen {
                     let expr = Expr {
-                        location: (
-                            self.tokens[position].span().0,
-                            self.tokens[position].span().1,
-                        ),
+                        location: (self.tokens[position].span().0, self.tokens[position].span().1),
                         kind: ExprKind::Nothing,
                     };
                     return Ok((expr.into(), position + 2));
@@ -547,71 +481,51 @@ impl<'s> Parser<'s> {
                 }
                 if self.tokens[pos].kind == LeftParen {
                     let (args, pos) = self.parse_arguments(pos);
-                    let expr = Expr {
-                        location,
-                        kind: ExprKind::FnCall(name, args),
-                    };
+                    let expr = Expr { location, kind: ExprKind::FnCall(name, args) };
                     return Ok((expr.into(), pos));
                 }
-                let expr = Expr {
-                    location,
-                    kind: ExprKind::Identifier(name),
-                };
+                let expr = Expr { location, kind: ExprKind::Identifier(name) };
                 Ok((expr.into(), pos))
             }
             Integer => {
                 let (value, pos) = self.parse_integer(position);
-                let expr = Expr {
-                    location: self.tokens[position].span(),
-                    kind: ExprKind::Integer(value),
-                };
+                let expr =
+                    Expr { location: self.tokens[position].span(), kind: ExprKind::Integer(value) };
                 Ok((expr.into(), pos))
             }
             String => {
                 let value = self.parse_string(position);
-                let expr = Expr {
-                    location: self.tokens[position].span(),
-                    kind: ExprKind::String(value),
-                };
+                let expr =
+                    Expr { location: self.tokens[position].span(), kind: ExprKind::String(value) };
                 Ok((expr.into(), position + 1))
             }
             Decimal => {
                 let (value, pos) = self.parse_identifier(position)?;
-                let expr = Expr {
-                    location: self.tokens[position].span(),
-                    kind: ExprKind::Integer(value),
-                };
+                let expr =
+                    Expr { location: self.tokens[position].span(), kind: ExprKind::Integer(value) };
                 Ok((expr.into(), pos))
             }
             UnterminatedString => {
                 let value = self.parse_string(position);
-                let expr = Expr {
-                    location: self.tokens[position].span(),
-                    kind: ExprKind::String(value),
-                };
+                let expr =
+                    Expr { location: self.tokens[position].span(), kind: ExprKind::String(value) };
                 Ok((expr.into(), position + 1))
             }
             Indent => {
                 let (block, pos) = self.parse_block(position + 1);
-                let expr = Expr {
-                    location: self.tokens[position].span(),
-                    kind: ExprKind::Block(block),
-                };
+                let expr =
+                    Expr { location: self.tokens[position].span(), kind: ExprKind::Block(block) };
                 Ok((expr.into(), pos))
             }
             Linend | Dedent => {
-                let expr = Expr {
-                    location: self.tokens[position].span(),
-                    kind: ExprKind::Unreachable,
-                };
+                let expr =
+                    Expr { location: self.tokens[position].span(), kind: ExprKind::Unreachable };
                 self.error(position, "Expected expression");
                 Ok((expr.into(), position))
             }
             _ => {
-                let expr = Expr {
-                    location: self.tokens[position].span(),
-                    kind: ExprKind::Unreachable,
-                };
+                let expr =
+                    Expr { location: self.tokens[position].span(), kind: ExprKind::Unreachable };
                 self.error(position, "Expected expression");
                 Ok((expr.into(), position + 1))
             }
@@ -650,10 +564,7 @@ impl<'s> Parser<'s> {
                 }
                 let end_position = variable_pos + 1;
                 let typ = Typename {
-                    location: (
-                        self.tokens[position].span().0,
-                        self.tokens[variable_pos].span().1,
-                    ),
+                    location: (self.tokens[position].span().0, self.tokens[variable_pos].span().1),
                     kind: TypenameKind::Tuple(fields),
                 };
                 Ok((typ, end_position))
@@ -662,10 +573,7 @@ impl<'s> Parser<'s> {
                 let (typ, pos) = self.parse_typename(position + 1)?;
                 let pos = self.parse_token(pos, RightBracket)?;
                 let typ = Typename {
-                    location: (
-                        self.tokens[position].span().0,
-                        self.tokens[pos - 1].span().1,
-                    ),
+                    location: (self.tokens[position].span().0, self.tokens[pos - 1].span().1),
                     kind: TypenameKind::Array(typ.into()),
                 };
                 Ok((typ, pos))
@@ -724,13 +632,8 @@ impl<'s> Parser<'s> {
         } else {
             (None, pos)
         };
-        let definition = VarDef {
-            location: self.tokens[position].span(),
-            name,
-            mutable,
-            typename,
-            value,
-        };
+        let definition =
+            VarDef { location: self.tokens[position].span(), name, mutable, typename, value };
         Ok((definition, pos))
     }
 
@@ -752,10 +655,7 @@ impl<'s> Parser<'s> {
                 self.parse_typename(pos + 1).unwrap()
             } else {
                 (
-                    Typename {
-                        location: self.tokens[id_pos].span(),
-                        kind: TypenameKind::Unknown,
-                    },
+                    Typename { location: self.tokens[id_pos].span(), kind: TypenameKind::Unknown },
                     pos,
                 )
             };
@@ -770,11 +670,7 @@ impl<'s> Parser<'s> {
                 );
             }
             let (expr, pos) = self.parse_expr(pos + 1).unwrap_or((
-                Expr {
-                    location: self.tokens[pos].span(),
-                    kind: ExprKind::Unreachable,
-                }
-                .into(),
+                Expr { location: self.tokens[pos].span(), kind: ExprKind::Unreachable }.into(),
                 pos + 1,
             ));
             let definition = VarDef {
@@ -787,11 +683,7 @@ impl<'s> Parser<'s> {
             return (Stmt::DefLocal(definition), pos);
         }
         let (expr, pos) = self.parse_expr(position).unwrap_or((
-            Expr {
-                location: self.tokens[position].span(),
-                kind: ExprKind::Unreachable,
-            }
-            .into(),
+            Expr { location: self.tokens[position].span(), kind: ExprKind::Unreachable }.into(),
             position,
         ));
         (Stmt::Expression((*expr).clone()), pos)
@@ -802,10 +694,7 @@ impl<'s> Parser<'s> {
         use TokenKind::*;
         if self.tokens[position].kind != LeftParen {
             self.error(position, "expected '('");
-            return (
-                vec![],
-                position + (self.tokens[position].kind != Eof) as usize,
-            );
+            return (vec![], position + (self.tokens[position].kind != Eof) as usize);
         }
         let mut args = vec![];
         let mut position = position + 1;
@@ -873,8 +762,7 @@ impl<'s> Parser<'s> {
     }
 
     fn parse_identifier_soft(&mut self, position: usize) -> (Str, usize) {
-        self.parse_identifier(position)
-            .unwrap_or_else(|_| ("".into(), position))
+        self.parse_identifier(position).unwrap_or_else(|_| ("".into(), position))
     }
 
     fn parse_integer(&mut self, position: usize) -> (Str, usize) {
@@ -957,20 +845,14 @@ impl<'s> Parser<'s> {
         let line_no = before.split('\n').count().max(1);
         let before = before.split('\n').last().unwrap_or(" ");
         let after = after.split('\n').next().unwrap_or(" ");
-        format!(
-            "\x1b[90m{:3}\x1b[0m {}\x1b[91m▶\x1b[0m{}",
-            line_no, before, after
-        )
-        .replace("\t", "     ")
+        format!("\x1b[90m{:3}\x1b[0m {}\x1b[91m▶\x1b[0m{}", line_no, before, after)
+            .replace("\t", "     ")
     }
 
     fn log(&self, msg: &str, position: usize) {
         if DEBUG_LOGGING {
             let line = self.prettify(position);
-            eprintln!(
-                "{} \x1b[90m# {} /{:?}\x1b[0m",
-                line, msg, self.tokens[position].kind
-            );
+            eprintln!("{} \x1b[90m# {} /{:?}\x1b[0m", line, msg, self.tokens[position].kind);
         }
     }
 }

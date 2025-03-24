@@ -85,23 +85,14 @@ pub enum TokenKind {
 
 impl<'s> Lexer<'s> {
     fn new(source: &'s str) -> Self {
-        Self {
-            source,
-            position: 0,
-            indentation: 0,
-            tokens: vec![],
-        }
+        Self { source, position: 0, indentation: 0, tokens: vec![] }
     }
 
     fn tokenize(mut self) -> Vec<Token> {
         while self.position < self.source.len() {
             self.read_next_token();
         }
-        while !self
-            .tokens
-            .last()
-            .is_some_and(|eof| eof.kind == TokenKind::Eof)
-        {
+        while !self.tokens.last().is_some_and(|eof| eof.kind == TokenKind::Eof) {
             self.read_next_token();
         }
         self.tokens
@@ -195,18 +186,15 @@ impl<'s> Lexer<'s> {
                     let current_indent = self.position - start - 1;
                     if self.peek() != '\n' {
                         if current_indent == self.indentation {
-                            self.tokens
-                                .push(Token::new(start + 1, current_indent, Linend));
+                            self.tokens.push(Token::new(start + 1, current_indent, Linend));
                         }
                         while current_indent > self.indentation {
-                            self.tokens
-                                .push(Token::new(start + current_indent, 1, Indent));
+                            self.tokens.push(Token::new(start + current_indent, 1, Indent));
                             self.indentation += 1;
                         }
                         while current_indent < self.indentation {
                             self.tokens.push(Token::new(start, 1, Linend));
-                            self.tokens
-                                .push(Token::new(start + 1, current_indent, Dedent));
+                            self.tokens.push(Token::new(start + 1, current_indent, Dedent));
                             self.indentation -= 1;
                         }
                     }
@@ -304,11 +292,7 @@ impl<'s> Lexer<'s> {
 impl Token {
     fn new(position: usize, length: usize, kind: TokenKind) -> Self {
         use std::convert::TryInto;
-        Self {
-            position: position.try_into().unwrap(),
-            length: length.try_into().unwrap(),
-            kind,
-        }
+        Self { position: position.try_into().unwrap(), length: length.try_into().unwrap(), kind }
     }
 
     pub fn span(&self) -> (u32, u32) {
