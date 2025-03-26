@@ -63,8 +63,8 @@ impl<'a> Runtime<'a> {
     pub fn new(program: &'a Bytecode) -> Self {
         let objects = Objects::new();
         let mut globals = Vec::with_capacity(program.globals.len());
-        for &global in &program.globals {
-            globals.push(global);
+        for global in &program.globals {
+            globals.push(global.value);
         }
         Runtime { program, function: 0xABEBA, objects, globals, stack: vec![], bp: 0 }
     }
@@ -223,7 +223,7 @@ impl<'a> Runtime<'a> {
                         }
                     }
                 }
-                JumpInto(items) => todo!(),
+                JumpTable(items) => todo!(),
                 Return => todo!(),
                 CallFunc(idx) => {
                     jump_table.push((false, jump_bp));

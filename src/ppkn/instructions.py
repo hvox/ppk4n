@@ -21,6 +21,15 @@ def pascal(name: str) -> str:
     return "".join(w.capitalize() for w in name.replace(".", "_").replace(":", "_").split("_"))
 
 
+def wasmed(name: str) -> str:
+    name = name.split(":")[0].replace("jump", "br")
+    if (sign := name[0]) == "u" and (name.startswith("u32") or name.startswith("u64")):
+        name = "i" + name[1:]
+    if name[0] == "i" and name.split(".")[-1] in "div rem shr ge gt le lt":
+        name += "_" + {"i": "s", "u": "u"}[sign]
+    return name
+
+
 def from_u64(expr: str, typ: str) -> str:
     return {
         "u64": f"{expr}",
@@ -41,6 +50,8 @@ def into_u64(expr: str, typ: str) -> str:
 
 INSTRUCTIONS_TSV = Path(__file__).resolve().parent / "instructions.tsv"
 INSTRUCTIONS = dict(parse_instr(line) for line in INSTRUCTIONS_TSV.read_text().splitlines()[1:])
+WASM_TSV = Path(__file__).resolve().parent / "wasm.tsv"
+WASM = {name: op.replace(" ", ", ") for name, op in (line.split("\t") for line in WASM_TSV.read_text().splitlines())}
 
 if sys.argv[1] == "definition":
     for name, imms, *_ in INSTRUCTIONS.values():
@@ -58,6 +69,16 @@ elif sys.argv[1] == "execution":
             print(f"\t{code}")
         else:
             print(f"\tlet result = {code};\n\tself.stack.push({into_u64('result', instr_typ)});")
+        print("}")
+elif sys.argv[1] == "wasm":
+    for name, imms, params, code in INSTRUCTIONS.values():
+        case = pascal(name) + (("(" + ", ".join({"size": "_size"}.get(x, x) for x, _ in imms) + ")") if imms else "")
+        opcode = WASM[wasmed(name)]
+        print(case, "=> {")
+        print("\tcode" + (f".extend([{opcode}]);" if "," in opcode else f".push({opcode});"))
+        for imm, typ in [(name, typ) for name, typ in imms if name not in "size location"]:
+            imm = f"{name} as i64" if typ in "i32 u32 u64" else imm
+            print(f"\tcode.encode(*{imm});" if typ not in "Type Vec<usize>" else "MANUAL")
         print("}")
 else:
     raise Exception(sys.argv[1])

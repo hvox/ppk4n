@@ -9,7 +9,7 @@ end			manual!
 end:if			manual!
 br	label:usize		manual!
 br_if	label:usize		manual!
-jump_into	labels:Vec<usize>		manual!
+jump_table	labels:Vec<usize>		manual!
 return			manual!
 call:func	index:usize		manual!
 call:import	index:usize		manual!

@@ -13,7 +13,7 @@ pub struct Bytecode {
     pub sources: HashMap<Str, Str>,
     pub types: IndexSet<FuncType>,
     pub imports: IndexMap<Str, Import>,
-    pub globals: Vec<u64>,
+    pub globals: Vec<GlobalVariable>,
     pub functions: IndexMap<Str, Func>,
     pub data: Vec<u8>,
 }
@@ -156,14 +156,16 @@ impl<'a> ProgramCompiler<'a> {
         }
         let (typ, body) = &self.program.globals[global];
         let typ = self.process_type(typ);
+        for global_type in &typ {
+            self.lir.globals.push(GlobalVariable { typ: *global_type, mutable: true, value: 0 });
+        }
         let layout = self.globals.insert(global.into(), typ);
         let values = body
             .as_ref()
             .map(|expr| self.process_const_expr(expr))
             .unwrap_or_else(|| vec![0; layout.len()]);
-        self.lir.globals.resize(self.lir.globals.len() + layout.len(), 0);
         for (&i, value) in layout.iter().zip(values) {
-            self.lir.globals[i] = value;
+            self.lir.globals[i].value = value;
         }
         layout
     }
@@ -502,7 +504,7 @@ pub enum Op {
     EndIf,
     Br(usize),
     BrIf(usize),
-    JumpInto(Vec<usize>),
+    JumpTable(Vec<usize>),
     Return,
     CallFunc(usize),
     CallImport(usize),
