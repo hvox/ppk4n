@@ -1,10 +1,10 @@
 // #![allow(unused)]
 use super::ppkn::hir::Program;
-use std::collections::{HashMap, VecDeque};
+use std::collections::VecDeque;
 use std::fs::OpenOptions;
 use std::io::{stdin, stdout, Read, Write};
 use std::time::Instant;
-use tinyjson::JsonValue;
+use json::{JsonValue, object, parse};
 
 thread_local! {
     static START_TIME: Instant = Instant::now();
@@ -71,20 +71,18 @@ impl State {
         match method.as_ref() {
             "initialize" => {
                 // TODO check if field "clientInfo" exists
-                log("Connected to ".to_string() + &params["clientInfo"].stringify().unwrap());
+                log("Connected to ".to_string() + &params["clientInfo"].to_string());
                 // log(params["capabilities"].stringify().unwrap());
-                let server_capabilites = JsonValue::Object(HashMap::from([
-                    ("positionEncoding".into(), "utf-8".to_string().into()),
-                    ("textDocumentSync".into(), 1.0f64.into()),
-                ]));
-                let server_info = JsonValue::Object(HashMap::from([
-                    ("name".into(), JsonValue::String("ppkn-lsp".into())),
-                    ("version".into(), JsonValue::String("0.0.1-dev".into())),
-                ]));
-                let result = JsonValue::Object(HashMap::from([
-                    ("capabilities".into(), server_capabilites),
-                    ("serverInfo".into(), server_info),
-                ]));
+                let result = object! {
+                    "capabilities": object! {
+                        "positionEncoding": "utf-8",
+                        "textDocumentSync": 1.0f64,
+                    },
+                    "serverInfo": object! {
+                        "name": "ppkn-lsp",
+                        "version": "0.0.1-dev",
+                    },
+                };
                 self.send_response(id, result);
             }
             "shutdown" => {
@@ -92,27 +90,28 @@ impl State {
                 self.send_response(id, JsonValue::Null);
             }
             unknown_method => {
-                log(format!("unknown method {:?}", unknown_method));
+                log(format!("unknown request {:?}", unknown_method));
             }
         }
     }
 
-    fn process_notification(&mut self, method: String, params: JsonValue) {
+    fn process_notification(&mut self, method: String, mut params: JsonValue) {
         match method.as_ref() {
+            "initialized" => {}
             "textDocument/didOpen" => {
-                let uri: String = params["textDocument"]["uri"].clone().try_into().unwrap();
-                let text: String = params["textDocument"]["text"].clone().try_into().unwrap();
+                let uri: String = params["textDocument"]["uri"].take_string().unwrap();
+                let text: String = params["textDocument"]["text"].take_string().unwrap();
                 log(format!("{}: {}", uri, text.len()));
                 self.update_source(uri, text);
             }
             "textDocument/didChange" => {
-                let uri: String = params["textDocument"]["uri"].clone().try_into().unwrap();
-                let text: String = params["contentChanges"][0]["text"].clone().try_into().unwrap();
+                let uri: String = params["textDocument"]["uri"].take_string().unwrap();
+                let text: String = params["contentChanges"][0]["text"].take_string().unwrap();
                 self.update_source(uri, text);
             }
             "textDocument/didSave" => {}
             unknown_method => {
-                log(format!("unknown method {:?}", unknown_method));
+                log(format!("unknown notification {:?}", unknown_method));
             }
         }
     }
@@ -135,39 +134,41 @@ impl State {
 
 fn read_message(message: impl AsRef<str>) -> Message {
     // TODO: less clones
-    let message: JsonValue = message.as_ref().parse().unwrap();
-    let message: &HashMap<String, JsonValue> = message.get().unwrap();
-    if let Some(id) = message.get("id") {
-        if let Some(method) = message.get("method") {
-            let method: String = method.clone().try_into().unwrap();
-            let params = message.get("params").cloned().unwrap_or(JsonValue::Null);
-            Message::Request { id: id.clone(), method, params: params.clone() }
+    let mut message: JsonValue = parse(message.as_ref()).unwrap();
+    if message.has_key("id") {
+        let id = message["id"].take();
+        if message.has_key("method") {
+            let method = message["method"].take_string().unwrap();
+            let params = message["params"].take();
+            Message::Request { id, method, params }
         } else {
-            let result = message["result"].clone();
-            Message::Response { id: id.clone(), result }
+            let result = message["result"].take();
+            Message::Response { id, result }
         }
     } else {
-        let method: String = message["method"].clone().try_into().unwrap();
-        let params = message.get("params").cloned().unwrap_or(JsonValue::Null);
+        let method = message["method"].take_string().unwrap();
+        let params = message["params"].take();
         Message::Notification { method, params }
     }
 }
 
 fn encode_message(message: Message) -> String {
     let message = match message {
-        Message::Request { id, method, params } => HashMap::from([
-            ("id".into(), id),
-            ("method".into(), method.into()),
-            ("params".into(), params),
-        ]),
-        Message::Response { id, result } => {
-            HashMap::from([("id".into(), id), ("result".into(), result)])
-        }
-        Message::Notification { method, params } => {
-            HashMap::from([("method".into(), method.into()), ("params".into(), params)])
-        }
+        Message::Request { id, method, params } => object! {
+            "id":  id,
+            "method": method,
+            "params": params,
+        },
+        Message::Response { id, result } => object! {
+            "id": id,
+            "result": result,
+        },
+        Message::Notification { method, params } => object! {
+            "method": method,
+            "params": params,
+        },
     };
-    let message = JsonValue::Object(message).stringify().unwrap();
+    let message = message.dump();
     format!("Content-Length: {}\r\n\r\n{}", message.len(), message)
 }
 

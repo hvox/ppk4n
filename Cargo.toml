@@ -5,5 +5,5 @@ edition = "2021"
 
 [dependencies]
 indexmap = "2.7.0"
+json = "0.12.4"
 ordered-float = "4.6.0"
-tinyjson = "2.5.1"
