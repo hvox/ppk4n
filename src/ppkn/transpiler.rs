@@ -82,7 +82,7 @@ mod python {
             Assignment(variable, value) => format!("{} = {}", variable, transpile_instr(value)),
             Block(block) => {
                 let mut code = "".to_string();
-                for (id, value) in &block.stmts {
+                for (id, value, _) in &block.stmts {
                     if let Some((id, _mutable)) = id {
                         code.push_str(&format!("{} = ", id));
                     }
@@ -175,7 +175,7 @@ mod rust {
             Assignment(variable, value) => format!("{} = {}", variable, transpile_instr(value)),
             Block(block) => {
                 let mut code = "".to_string();
-                for (id, value) in &block.stmts {
+                for (id, value, _) in &block.stmts {
                     if let Some((id, _mutable)) = id {
                         code.push_str(&format!("let {} = ", id));
                     }

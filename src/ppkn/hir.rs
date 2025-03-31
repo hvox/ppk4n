@@ -1,7 +1,7 @@
 use std::{
     cell::Cell,
     collections::{HashMap, VecDeque},
-    fmt::{format, Debug},
+    fmt::{Debug},
     fs,
     io::Write,
     ops::{Index, IndexMut},
@@ -45,7 +45,7 @@ pub struct Module {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Function {
-    pub location: (u32, u32),
+    pub span: (u32, u32),
     pub module: Str,
     pub name: Str,
     pub parameters: Vec<(Str, Type)>,
@@ -69,7 +69,7 @@ pub struct Body {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Instr {
-    pub location: u32,
+    pub span: (u32, u32),
     pub typ: TypeId,
     pub kind: InstrKind,
 }
@@ -93,7 +93,7 @@ pub enum InstrKind {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Block {
-    pub stmts: Vec<(Option<(Str, bool)>, Instr)>,
+    pub stmts: Vec<(Option<(Str, bool)>, Instr, u32)>,
     pub result: Instr,
 }
 
@@ -258,7 +258,7 @@ impl Program {
             let typechecker = BodyTypechecker::new(self, module_name, &result, &params[..]);
             let (body, new_errors) = typechecker.typecheck_body(&function.body);
             let function = Function {
-                location: function.location,
+                span: function.location,
                 module: module_name.into(),
                 name: name.clone(),
                 parameters: params,
@@ -644,7 +644,7 @@ impl<'a> BodyTypechecker<'a> {
         if typ != actual_type {
             self.unify(expr.location, typ, actual_type);
         }
-        Instr { location: expr.location.0, typ, kind }
+        Instr { span: expr.location, typ, kind }
     }
 
     fn typecheck_block(&mut self, block: &Indented, result: TypeId) -> Block {
@@ -659,35 +659,35 @@ impl<'a> BodyTypechecker<'a> {
                     let typ = self.resolve_typename(&vardef.typename);
                     self.locals.push((name.clone(), typ));
                     let expr = self.typecheck(&vardef.value.clone().unwrap(), typ);
-                    stmts.push((Some((name, vardef.mutable)), expr));
+                    stmts.push((Some((name, vardef.mutable)), expr, vardef.location.0));
                 }
                 Stmt::Expression(expr) => {
                     let typ = match expr.kind {
                         ExprKind::Block(_) | ExprKind::If(_, _, _) => self.types.void,
                         _ => self.types.insert(InferredType::Unknown),
                     };
-                    stmts.push((None, self.typecheck(expr, typ)));
+                    stmts.push((None, self.typecheck(expr, typ), expr.location.0));
                 }
             }
         }
         let result = if self.types[result] == InferredType::Void {
-            Instr { location: block.location.0, typ: self.types.void, kind: InstrKind::NoOp }
+            Instr { span: block.location, typ: self.types.void, kind: InstrKind::NoOp }
         } else if let Some(stmt) = block.stmts.last() {
             match stmt {
                 Stmt::Expression(expr) => self.typecheck(expr, result),
                 Stmt::DefLocal(vardef) => {
                     let name = vardef.name.clone();
-                    let location = vardef.location.0;
+                    let location = vardef.location;
                     let typ = self.resolve_typename(&vardef.typename);
                     let expr = self.typecheck(&vardef.value.clone().unwrap(), typ);
-                    stmts.push((Some((name, vardef.mutable)), expr));
+                    stmts.push((Some((name, vardef.mutable)), expr, location.0));
                     self.unify(vardef.location, result, self.types.void);
-                    Instr { location, typ: self.types.void, kind: InstrKind::NoOp }
+                    Instr { span: location, typ: self.types.void, kind: InstrKind::NoOp }
                 }
             }
         } else {
             self.unify(block.location, result, self.types.void);
-            Instr { location: block.location.0, typ: self.types.void, kind: InstrKind::NoOp }
+            Instr { span: block.location, typ: self.types.void, kind: InstrKind::NoOp }
         };
         self.locals.truncate(locals_count);
         Block { stmts, result }
@@ -826,7 +826,7 @@ impl Function {
                     for stmt in &block.stmts {
                         if let Some((var, _)) = &stmt.0 {
                             let typ = self.body.types.realize(stmt.1.typ);
-                            if expr.location as usize <= position {
+                            if expr.span.1 as usize <= position {
                                 variables.push((var.clone(), format!("{:?}", typ).into()));
                                 queue.push_back(&stmt.1);
                             }
@@ -837,6 +837,81 @@ impl Function {
             }
         }
         variables
+    }
+}
+
+impl Function {
+    pub fn at_position<R>(
+        &self,
+        position: usize,
+        f: impl FnOnce(HashMap<Str, (u32, Type)>, &Instr) -> R,
+    ) -> R {
+        let mut variables = HashMap::new();
+        for (variable, typ) in &self.parameters {
+            variables.insert(variable.clone(), (0, typ.clone()));
+        }
+        let mut queue = &self.body.value;
+        loop {
+            use InstrKind::*;
+            match &queue.kind {
+                Tuple(fields) if !fields.is_empty() => {
+                    queue = &fields[0];
+                    for field in &fields[1..] {
+                        if field.span.0 as usize <= position {
+                            queue = field;
+                        }
+                    }
+                }
+                Block(block) => {
+                    queue = &block.result;
+                    for (target, instr, location) in &block.stmts {
+                        if instr.span.0 as usize <= position {
+                            queue = instr;
+                        }
+                        if let Some((variable, _)) = target {
+                            let typ = self.body.types.realize(queue.typ);
+                            variables.insert(variable.clone(), (*location, typ));
+                        }
+                    }
+                    if block.result.span.0 as usize <= position {
+                        queue = &block.result;
+                    }
+                }
+                Assignment(_, instr) if instr.span.0 as usize <= position => queue = instr,
+                While(cond, body) => {
+                    queue = if cond.span.1 as usize > position { cond } else { body }
+                }
+                If(cond, then, els) => {
+                    queue = if cond.span.1 as usize > position {
+                        cond
+                    } else if then.span.1 as usize > position {
+                        then
+                    } else {
+                        els
+                    }
+                }
+                MethodCall(receiver, _, args) => {
+                    if receiver.span.1 as usize > position {
+                        queue = receiver;
+                    } else if args.first().is_some_and(|arg| arg.span.0 as usize <= position) {
+                        for arg in args {
+                            if arg.span.0 as usize <= position {
+                                queue = arg;
+                            }
+                        }
+                    } else {
+                        return f(variables, queue);
+                    }
+                }
+                FnCall(_, args)
+                    if args.first().is_some_and(|arg| arg.span.0 as usize <= position) =>
+                {
+                    queue = args.iter().rfind(|arg| arg.span.0 as usize <= position).unwrap();
+                }
+                Return(value) if queue.span.0 as usize <= position => queue = value,
+                _ => return f(variables, queue),
+            }
+        }
     }
 }
 

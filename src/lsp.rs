@@ -1,5 +1,6 @@
 // #![allow(unused)]
 use super::ppkn::hir::Program;
+use super::ppkn::hir::InstrKind;
 use std::collections::VecDeque;
 use std::fs::OpenOptions;
 use std::io::{stdin, stdout, Read, Write};
@@ -80,11 +81,63 @@ impl State {
                         "positionEncoding": "utf-8",
                         "textDocumentSync": 1,
                         "completionProvider": object! {"completionItem": object! {"labelDetailsSupport": true}},
+                        "hoverProvider": true,
                     },
                     "serverInfo": object! {
                         "name": "ppkn-lsp",
                         "version": "0.0.1-dev",
                     },
+                };
+                self.send_response(id, result);
+            }
+            "textDocument/hover" => {
+                let uri = params["textDocument"]["uri"].take_string().unwrap();
+                let module = self.resolve_path(uri);
+                let line = params["position"]["line"].as_usize().unwrap();
+                let column = params["position"]["character"].as_usize().unwrap();
+                let position = self.resolve_position(&module, line, column);
+                log(format!(
+                    "{}:{}: {}[{}]{}",
+                    line,
+                    column,
+                    &self.project.sources[&module][position - 5..position],
+                    &self.project.sources[&module][position..position + 1],
+                    &self.project.sources[&module][position + 1..position + 6]
+                ));
+                let mut pos_fname: Rc<str> = "".into();
+                let mut min_dist: usize = usize::MAX;
+                for (fname, f) in &self.project.functions {
+                    let (start, end) = f.span;
+                    if f.module == module && start as usize <= position && position < end as usize {
+                        pos_fname = fname.clone();
+                        min_dist = 0;
+                    } else if f.module == module && start as usize <= position {
+                        let dist = position - end as usize;
+                        if dist < min_dist {
+                            pos_fname = fname.clone();
+                            min_dist = dist;
+                        }
+                    }
+                }
+                let result = if !pos_fname.is_empty() {
+                    use InstrKind::*;
+                    let hover_info = self.project.functions[&pos_fname].at_position(
+                        position,
+                        |variables, instr| match &instr.kind {
+                            Identifier(var) | Assignment(var, _) => {
+								log(var);
+                                format!("{}: {:?}", var, variables[var].1)
+                            }
+                            MethodCall(_, name, _) => format!("fun {}(self, ...)", name),
+                            FnCall(fname, _) => format!("fun {}(...)", fname),
+                            Unreachable => "Unreachable code".to_string(),
+                            NoOp => "Do nothing at all".to_string(),
+                            _ => "Aboba".to_string(),
+                        },
+                    );
+                    object! { "contents": hover_info }
+                } else {
+                    JsonValue::Null
                 };
                 self.send_response(id, result);
             }
@@ -108,7 +161,7 @@ impl State {
                 let mut pos_fname: Rc<str> = "".into();
                 let mut min_dist: usize = usize::MAX;
                 for (fname, f) in &self.project.functions {
-                    let (start, end) = f.location;
+                    let (start, end) = f.span;
                     if f.module == module && start as usize <= position && position < end as usize {
                         pos_fname = fname.clone();
                         min_dist = 0;
@@ -183,12 +236,12 @@ impl State {
     fn resolve_position(&self, module: &str, line: usize, character: usize) -> usize {
         let mut position = 0;
         let mut current_line = 0;
-        let mut current_column = 1;
+        let mut current_column = 0;
         for chr in self.project.sources[module].chars() {
             position += chr.len_utf8();
             if chr == '\n' {
                 current_line += 1;
-                current_column = 1;
+                current_column = 0;
             } else {
                 current_column += chr.len_utf8();
             }

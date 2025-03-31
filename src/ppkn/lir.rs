@@ -321,7 +321,7 @@ impl<'a, 'p> FunctionCompiler<'a, 'p> {
             }
             Block(block) => {
                 let shadowed = self.locals.shadowed.len();
-                for (target, instr) in &block.stmts {
+                for (target, instr, _) in &block.stmts {
                     self.compile_instr(instr, code);
                     let typ = self.function.body.types.realize(instr.typ);
                     if let Some((name, _mutable)) = target {
@@ -374,7 +374,7 @@ impl<'a, 'p> FunctionCompiler<'a, 'p> {
                 code.push(Op::EndIf);
             }
             MethodCall(receiver, method, args) => {
-                let src = instr.location as usize;
+                let src = instr.span.0 as usize;
                 let typ = self.function.body.types.realize(receiver.typ);
                 self.compile_instr(receiver, code);
                 args.iter().for_each(|x| self.compile_instr(x, code));
