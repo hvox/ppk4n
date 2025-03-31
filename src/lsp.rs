@@ -3,8 +3,10 @@ use super::ppkn::hir::Program;
 use std::collections::VecDeque;
 use std::fs::OpenOptions;
 use std::io::{stdin, stdout, Read, Write};
+use std::rc::Rc;
 use std::time::Instant;
-use json::{JsonValue, object, parse};
+use std::usize;
+use json::{array, object, parse, JsonValue};
 
 thread_local! {
     static START_TIME: Instant = Instant::now();
@@ -54,7 +56,7 @@ pub fn main() {
             }
         }
         while let Some(message) = state.queue.pop_back() {
-            print!("{}", encode_message(message));
+            println!("{}", encode_message(message));
         }
         _ = stdout().flush();
     }
@@ -67,7 +69,7 @@ struct State {
 }
 
 impl State {
-    fn process_request(&mut self, id: JsonValue, method: String, params: JsonValue) {
+    fn process_request(&mut self, id: JsonValue, method: String, mut params: JsonValue) {
         match method.as_ref() {
             "initialize" => {
                 // TODO check if field "clientInfo" exists
@@ -76,7 +78,8 @@ impl State {
                 let result = object! {
                     "capabilities": object! {
                         "positionEncoding": "utf-8",
-                        "textDocumentSync": 1.0f64,
+                        "textDocumentSync": 1,
+                        "completionProvider": object! {"completionItem": object! {"labelDetailsSupport": true}},
                     },
                     "serverInfo": object! {
                         "name": "ppkn-lsp",
@@ -84,6 +87,51 @@ impl State {
                     },
                 };
                 self.send_response(id, result);
+            }
+            "textDocument/completion" => {
+                // log(format!("{}", params));
+                let uri = params["textDocument"]["uri"].take_string().unwrap();
+                let module = self.resolve_path(uri);
+                let line = params["position"]["line"].as_usize().unwrap();
+                let column = params["position"]["character"].as_usize().unwrap();
+                let position = self.resolve_position(&module, line, column);
+                // log(format!(
+                //     "{}${}",
+                //     &self.project.sources[&module][position - 5..position],
+                //     &self.project.sources[&module][position..position + 5]
+                // ));
+                let mut completions = array![];
+                for (gname, (typ, _)) in &self.project.globals {
+                    let item = object! {"label": gname.to_string(), "kind": 6, "detail": format!("{:?}", typ)};
+                    completions.push(item).unwrap();
+                }
+                let mut pos_fname: Rc<str> = "".into();
+                let mut min_dist: usize = usize::MAX;
+                for (fname, f) in &self.project.functions {
+                    let (start, end) = f.location;
+                    if f.module == module && start as usize <= position && position < end as usize {
+                        pos_fname = fname.clone();
+                        min_dist = 0;
+                    } else if f.module == module && start as usize <= position {
+                        let dist = position - end as usize;
+                        if dist < min_dist {
+                            pos_fname = fname.clone();
+                            min_dist = dist;
+                        }
+                    }
+                    let fname = fname.to_string();
+                    let label = fname.strip_prefix(&format!("{}:", module)).unwrap_or(&fname);
+                    let item = object! {"label": label, "kind": 3, "detail": "(...) -> (...)"};
+                    completions.push(item).unwrap();
+                }
+                if !pos_fname.is_empty() {
+                    for (var, typ) in self.project.functions[&pos_fname].variables(position) {
+                        let item = object! {"label": var.to_string(), "kind": 6, "detail": typ.to_string()};
+                        completions.push(item).unwrap();
+                    }
+                }
+                log(format!("Send completions: {}", completions));
+                self.send_response(id, completions);
             }
             "shutdown" => {
                 log("We had nothing to do anyway, bye!");
@@ -117,14 +165,39 @@ impl State {
     }
 
     fn update_source(&mut self, uri: String, content: String) {
-        let Some(path) = uri.strip_prefix("file://") else { return };
-        let module = path.split("/").last().unwrap().split_once(".").unwrap().0;
-        self.project.sources.insert(module.into(), content.into());
+        let module = self.resolve_path(uri);
+        self.project.sources.insert(module.clone(), content.into());
         self.project = Program::default();
-        if let Err(errors) = self.project.load_and_typecheck(module.into()) {
+        if let Err(errors) = self.project.load_and_typecheck(module) {
             log(format!("{:?}", errors));
         }
-        log(format!("{:?}", self.project.functions.keys().collect::<Vec<_>>()))
+        // log(format!("{:?}", self.project.functions.keys().collect::<Vec<_>>()))
+    }
+
+    fn resolve_path(&mut self, uri: String) -> Rc<str> {
+        let path = uri.strip_prefix("file://").unwrap();
+        let module = path.split("/").last().unwrap().split_once(".").unwrap().0;
+        module.into()
+    }
+
+    fn resolve_position(&self, module: &str, line: usize, character: usize) -> usize {
+        let mut position = 0;
+        let mut current_line = 0;
+        let mut current_column = 1;
+        for chr in self.project.sources[module].chars() {
+            position += chr.len_utf8();
+            if chr == '\n' {
+                current_line += 1;
+                current_column = 1;
+            } else {
+                current_column += chr.len_utf8();
+            }
+            // log(format!("{}:{} =?= {}:{}", current_line, current_column, line, character));
+            if (current_line, current_column) >= (line, character) {
+                break;
+            }
+        }
+        position
     }
 
     fn send_response(&mut self, id: JsonValue, result: JsonValue) {

@@ -1,7 +1,7 @@
 use std::{
     cell::Cell,
-    collections::HashMap,
-    fmt::Debug,
+    collections::{HashMap, VecDeque},
+    fmt::{format, Debug},
     fs,
     io::Write,
     ops::{Index, IndexMut},
@@ -45,6 +45,7 @@ pub struct Module {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Function {
+    pub location: (u32, u32),
     pub module: Str,
     pub name: Str,
     pub parameters: Vec<(Str, Type)>,
@@ -257,6 +258,7 @@ impl Program {
             let typechecker = BodyTypechecker::new(self, module_name, &result, &params[..]);
             let (body, new_errors) = typechecker.typecheck_body(&function.body);
             let function = Function {
+                location: function.location,
                 module: module_name.into(),
                 name: name.clone(),
                 parameters: params,
@@ -810,6 +812,47 @@ impl<'a> BodyTypechecker<'a> {
         // self.program.modules[&self.module].poisoned.set(true);
         // Is using Cell here overkill?
         // self.program.modules[&self.module].poisoned = true;
+    }
+}
+
+impl Function {
+    pub fn variables(&self, position: usize) -> Vec<(Str, Str)> {
+        let mut variables = vec![];
+        let mut queue = VecDeque::new();
+        queue.push_back(&self.body.value);
+        while let Some(expr) = queue.pop_front() {
+            match &expr.kind {
+                InstrKind::Block(block) => {
+                    for stmt in &block.stmts {
+                        if let Some((var, _)) = &stmt.0 {
+                            let typ = self.body.types.realize(stmt.1.typ);
+                            if expr.location as usize <= position {
+                                variables.push((var.clone(), format!("{:?}", typ).into()));
+                                queue.push_back(&stmt.1);
+                            }
+                        }
+                    }
+                }
+                _ => queue.extend(expr.children()),
+            }
+        }
+        variables
+    }
+}
+
+impl Instr {
+    pub fn children(&self) -> Vec<&Instr> {
+        match &self.kind {
+            InstrKind::Tuple(exprs) => exprs.iter().collect(),
+            InstrKind::Assignment(_, expr) => vec![&expr],
+            InstrKind::Block(block) => block.stmts.iter().map(|x| &x.1).collect(),
+            InstrKind::While(expr1, expr2) => vec![&expr1, &expr2],
+            InstrKind::If(expr1, expr2, expr3) => vec![&expr1, &expr2, expr3],
+            InstrKind::MethodCall(x, _, exprs) => vec![&**x].into_iter().chain(exprs).collect(),
+            InstrKind::FnCall(_, exprs) => exprs.iter().collect(),
+            InstrKind::Return(expr) => vec![expr],
+            _ => vec![],
+        }
     }
 }
 

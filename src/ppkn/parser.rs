@@ -41,7 +41,7 @@ pub struct Dependency {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct FunDef {
-    pub location: usize,
+    pub location: (u32, u32),
     pub name: Str,
     pub params: Vec<FunParameter>,
     pub result: Typename,
@@ -268,7 +268,8 @@ impl<'s> Parser<'s> {
         };
         let pos = self.try_parse_token(pos, Linend).unwrap_or(pos);
         let (body, pos) = self.parse_expr(pos)?;
-        let function = FunDef { location: position, name, params, result, body };
+        let location = (self.tokens[position].span().0, self.tokens[pos].span().0);
+        let function = FunDef { location, name, params, result, body };
         Ok((function, pos))
     }
 
