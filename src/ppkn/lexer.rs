@@ -1,11 +1,15 @@
 use std::fmt::Debug;
 
 pub fn tokenize(source: &str) -> Vec<Token> {
-    Lexer::new(source).tokenize()
+    Lexer::new(source, false).tokenize()
+}
+
+pub fn tokenize_with_comments(source: &str) -> Vec<Token> {
+    Lexer::new(source, true).tokenize()
 }
 
 struct Lexer<'src> {
-    // TODO: use iterator
+    preserve_comments: bool,
     source: &'src str,
     position: usize,
     indentation: usize,
@@ -21,6 +25,9 @@ pub struct Token {
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Copy)]
 pub enum TokenKind {
+    // Comments
+    Comment,
+
     // Single-character tokens.
     LeftParen,
     RightParen,
@@ -84,8 +91,8 @@ pub enum TokenKind {
 }
 
 impl<'s> Lexer<'s> {
-    fn new(source: &'s str) -> Self {
-        Self { source, position: 0, indentation: 0, tokens: vec![] }
+    fn new(source: &'s str, preserve_comments: bool) -> Self {
+        Self { preserve_comments, source, position: 0, indentation: 0, tokens: vec![] }
     }
 
     fn tokenize(mut self) -> Vec<Token> {
@@ -161,6 +168,9 @@ impl<'s> Lexer<'s> {
             '#' => {
                 while self.peek() != '\n' {
                     self.read();
+                }
+                if self.preserve_comments {
+                    self.tokens.push(Token::new(start, self.position - start, Comment));
                 }
                 return self.read_next_token();
             }

@@ -336,6 +336,9 @@ impl<'s> Parser<'s> {
             return Ok((expr.clone(), *pos));
         }
         let (expr, mut pos) = self.parse_unary(position)?;
+        if pos >= self.tokens.len() {
+            pos = self.tokens.len() - 1;
+        }
         let mut ops: Vec<Token> = vec![];
         let mut args = vec![expr];
         while args.len() != 1 || precedence(self.tokens[pos].kind) > 0 {

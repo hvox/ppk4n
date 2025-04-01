@@ -1,6 +1,7 @@
 // #![allow(unused)]
 use super::ppkn::hir::Program;
 use super::ppkn::hir::InstrKind;
+use super::ppkn::lexer::*;
 use std::collections::VecDeque;
 use std::fs::OpenOptions;
 use std::io::{stdin, stdout, Read, Write};
@@ -12,6 +13,31 @@ use json::{array, object, parse, JsonValue};
 thread_local! {
     static START_TIME: Instant = Instant::now();
 }
+
+static TOKEN_TYPES: &[&str] = &[
+    "namespace",
+    "type",
+    "class",
+    "enum",
+    "interface",
+    "struct",
+    "typeParameter",
+    "parameter",
+    "variable",
+    "property",
+    "enumMember",
+    "event",
+    "function",
+    "method",
+    "macro",
+    "keyword",
+    "modifier",
+    "comment",
+    "string",
+    "number",
+    "regexp",
+    "operator",
+];
 
 pub fn main() {
     std::fs::write("lsp.log", "").unwrap();
@@ -84,12 +110,17 @@ impl State {
                         "hoverProvider": true,
                         "definitionProvider": true,
                         "renameProvider": true,
+                        "semanticTokensProvider": object! {"legend": object! {
+                            "tokenTypes": TOKEN_TYPES,
+                            "tokenModifiers": array![],
+                        }, "full": true },
                     },
                     "serverInfo": object! {
                         "name": "ppkn-lsp",
                         "version": "0.0.1-dev",
                     },
                 };
+                log(format!("{}", result["capabilities"]["semanticTokensProvider"]["legend"]));
                 self.send_response(id, result);
             }
             "textDocument/completion" => {
@@ -275,8 +306,54 @@ impl State {
                 result["changes"].insert(&uri, changes).unwrap();
                 self.send_response(id, result);
             }
+            "textDocument/semanticTokens/full" => {
+                let uri = params["textDocument"]["uri"].take_string().unwrap();
+                let module = self.resolve_path(uri.clone());
+                // TODO: This info should go from AST not from tokens
+                let mut tokens_encoded = vec![];
+                let mut position = 0;
+                let source = &self.project.sources[&module];
+                for token in tokenize_with_comments(source) {
+                    use TokenKind::*;
+                    let token_type = match token.kind {
+                        Comment => "comment",
+                        UnterminatedString | String => "string",
+                        Identifier => "variable",
+                        Integer | Decimal => "number",
+                        Use | Let | Mut | And | Class | Else | False | For | Fun | If | Or
+                        | Return | Super | This | True | While => "keyword",
+                        LeftBrace | RightBrace | LeftBracket | RightBracket | Comma | Dot
+                        | Minus | Plus | Colon | Semicolon | Slash | Star | Rem | Bang
+                        | BangEqual | Equal | EqualEqual | Greater | GreaterEqual | Less
+                        | LessEqual | RightArrow | LeftParen | RightParen => "operator",
+                        Eof | Indent | Dedent | Linend => continue,
+                    };
+                    let length = token.length as usize;
+                    let column = token.position as usize
+                        - position
+                        - source[position..token.position as usize]
+                            .char_indices()
+                            .rfind(|(_, ch)| *ch == '\n')
+                            .map(|(i, _)| i + 1)
+                            .unwrap_or(0);
+                    let line = source[position..token.position as usize]
+                        .chars()
+                        .filter(|ch| *ch == '\n')
+                        .count();
+                    position = token.position as usize;
+                    // log(format!("{}:{}:{} {:?}", line, column, length, token));
+                    let (token_type, _) = TOKEN_TYPES
+                        .iter()
+                        .enumerate()
+                        .find(|(_, typ)| **typ == token_type)
+                        .unwrap();
+                    tokens_encoded.extend([line, column, length, token_type, 0]);
+                }
+                self.send_response(id, object! {"data": tokens_encoded});
+            }
             "shutdown" => {
                 log("We had nothing to do anyway, bye!");
+                self.project = Default::default();
                 self.send_response(id, JsonValue::Null);
             }
             unknown_method => {
