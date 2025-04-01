@@ -57,7 +57,7 @@ pub fn main() {
             }
         }
         while let Some(message) = state.queue.pop_back() {
-            println!("{}", encode_message(message));
+            print!("{}", encode_message(message));
         }
         _ = stdout().flush();
     }
@@ -257,10 +257,14 @@ impl State {
 
     fn update_source(&mut self, uri: String, content: String) {
         let module = self.resolve_path(uri);
-        self.project.sources.insert(module.clone(), content.into());
+        let sources = std::mem::take(&mut self.project.sources);
         self.project = Program::default();
+        self.project.sources = sources;
+        self.project.sources.insert(module.clone(), content.into());
         if let Err(errors) = self.project.load_and_typecheck(module) {
             log(format!("{:?}", errors));
+        } else {
+            // log("updated");
         }
         // log(format!("{:?}", self.project.functions.keys().collect::<Vec<_>>()))
     }
@@ -295,7 +299,6 @@ impl State {
         let source = &self.project.sources[module][..position];
         let uri =
             format!("file://{}/{}.ppkn", self.project.root.as_os_str().to_string_lossy(), module);
-        // log(&uri);
         let line = source.lines().count() - 1;
         let column = source.lines().last().unwrap_or("").len();
         object! {
