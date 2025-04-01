@@ -1,7 +1,6 @@
 use std::{
     cell::Cell,
     collections::{HashMap, VecDeque},
-    fmt::{Debug},
     fs,
     io::Write,
     ops::{Index, IndexMut},
@@ -913,6 +912,46 @@ impl Function {
             }
         }
     }
+
+    pub fn find_references(&self, definition_location: usize) -> Vec<(u32, u32)> {
+        let mut references = Vec::new();
+        self.body.value.find_references(definition_location, &mut references);
+        references
+        // let mut stackqueue = Vec::new();
+        // let mut references = Vec::with_capacity(3);
+        // let mut variable_in_scope = false;
+        // stackqueue.push(&self.body.value);
+        // while let Some(instr) = stackqueue.pop() {
+        //     use InstrKind::*;
+        //     match &instr.kind {
+        //         Identifier(id) if variable_in_scope && id.as_ref() == variable => {
+        //             references.push((instr.span.0 as usize, instr.span.1 as usize))
+        //         }
+        //         Tuple(instrs) => stackqueue.extend(instrs),
+        //         Assignment(_, instr) => stackqueue.push_back(instr),
+        //         Block(block) => {
+        //             for (target, value, location) in &block.stmts {
+        //                 if target.is_some_and(|(name, _)| name.as_ref() == variable) {
+        //                     if variable_in_scope {
+        //                         continue;
+        //                     } else {
+        //                     }
+        //                 }
+        //             }
+        //         }
+        //         While(cond, body) => stackqueue.extend([&**cond, body]),
+        //         If(cond, then, els) => stackqueue.extend([&**cond, then, els]),
+        //         MethodCall(instr, _, instrs) => {
+        //             stackqueue.extend(instrs.iter().rev());
+        //             stackqueue.push(instr);
+        //         }
+        //         FnCall(_, instrs) => stackqueue.extend(instrs),
+        //         Return(instr) => stackqueue.push(instr),
+        //         _ => {}
+        //     }
+        // }
+        // references
+    }
 }
 
 impl Instr {
@@ -927,6 +966,99 @@ impl Instr {
             InstrKind::FnCall(_, exprs) => exprs.iter().collect(),
             InstrKind::Return(expr) => vec![expr],
             _ => vec![],
+        }
+    }
+
+    pub fn find_references(&self, pos: usize, refs: &mut Vec<(u32, u32)>) {
+        use InstrKind::*;
+        match &self.kind {
+            Tuple(fields) => fields.iter().for_each(|x| x.find_references(pos, refs)),
+            Block(block) => {
+                for (i, (target, value, location)) in block.stmts.iter().enumerate() {
+                    if *location as usize == pos && target.is_some() {
+                        let (variable, _) = (*target).clone().unwrap();
+                        let name = variable.as_ref();
+                        refs.push((pos as u32, (pos + name.len()) as u32));
+                        for (target, instr, _) in &block.stmts[i + 1..] {
+                            instr.find_name_references(name, refs);
+                            if target.as_ref().is_some_and(|(x, _)| x.as_ref() == name) {
+                                return;
+                            }
+                        }
+                        block.result.find_name_references(name, refs);
+                        return;
+                    }
+                    value.find_references(pos, refs);
+                }
+                block.result.find_references(pos, refs);
+            }
+            While(cond, body) => {
+                cond.find_references(pos, refs);
+                body.find_references(pos, refs);
+            }
+            If(cond, then, els) => {
+                cond.find_references(pos, refs);
+                then.find_references(pos, refs);
+                els.find_references(pos, refs);
+            }
+            MethodCall(receiver, _, args) => {
+                receiver.find_references(pos, refs);
+                args.iter().for_each(|x| x.find_references(pos, refs));
+            }
+            FnCall(_, args) => args.iter().for_each(|x| x.find_references(pos, refs)),
+            Assignment(_, value) | Return(value) => value.find_references(pos, refs),
+            _ => {}
+        }
+    }
+
+    pub fn find_name_references(&self, name: &str, refs: &mut Vec<(u32, u32)>) {
+        use InstrKind::*;
+        match &self.kind {
+            Block(block) => {
+                for (target, instr, _) in &block.stmts {
+                    instr.find_name_references(name, refs);
+                    if target.as_ref().is_some_and(|(x, _)| x.as_ref() == name) {
+                        return;
+                    }
+                }
+                block.result.find_name_references(name, refs);
+            }
+            Identifier(variable) if variable.as_ref() == name => refs.push(self.span),
+            Assignment(variable, value) => {
+                if variable.as_ref() == name {
+                    refs.push(self.span);
+                    value.find_name_references(name, refs);
+                }
+            }
+            kind => kind.for_each(|x| x.find_name_references(name, refs)),
+        }
+    }
+}
+
+impl InstrKind {
+    pub fn for_each(&self, mut f: impl FnMut(&Instr) -> ()) {
+        use InstrKind::*;
+        match self {
+            Block(block) => {
+                block.stmts.iter().for_each(|(_, x, _)| f(x));
+                f(&block.result);
+            }
+            While(cond, body) => {
+                f(cond);
+                f(body);
+            }
+            If(cond, then, els) => {
+                f(cond);
+                f(then);
+                f(els);
+            }
+            MethodCall(receiver, _, args) => {
+                f(receiver);
+                args.iter().for_each(|arg| f(arg));
+            }
+            Tuple(args) | FnCall(_, args) => args.iter().for_each(|arg| f(arg)),
+            Assignment(_, instr) | Return(instr) => f(instr),
+            Unreachable | NoOp | String(_) | Integer(_) | Identifier(_) => {}
         }
     }
 }

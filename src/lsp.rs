@@ -83,6 +83,7 @@ impl State {
                         "completionProvider": object! {"completionItem": object! {"labelDetailsSupport": true}},
                         "hoverProvider": true,
                         "definitionProvider": true,
+                        "renameProvider": true,
                     },
                     "serverInfo": object! {
                         "name": "ppkn-lsp",
@@ -224,6 +225,56 @@ impl State {
                     });
                 self.send_response(id, self.encode_position(&module, definition_location));
             }
+            "textDocument/rename" => {
+                let new_name = params["newName"].take_string().unwrap();
+                // log(format!("{}", params));
+                let uri = params["textDocument"]["uri"].take_string().unwrap();
+                let module = self.resolve_path(uri.clone());
+                let line = params["position"]["line"].as_usize().unwrap();
+                let column = params["position"]["character"].as_usize().unwrap();
+                let position = self.resolve_position(&module, line, column);
+                let mut pos_fname: Rc<str> = "".into();
+                let mut min_dist: usize = usize::MAX;
+                for (fname, f) in &self.project.functions {
+                    let (start, end) = f.span;
+                    if f.module == module && start as usize <= position && position < end as usize {
+                        pos_fname = fname.clone();
+                        min_dist = 0;
+                    } else if f.module == module && start as usize <= position {
+                        let dist = position - end as usize;
+                        if dist < min_dist {
+                            pos_fname = fname.clone();
+                            min_dist = dist;
+                        }
+                    }
+                }
+                if pos_fname.is_empty() {
+                    return self.send_response(id, JsonValue::Null);
+                }
+                let definition =
+                    self.project.functions[&pos_fname].at_position(position, |variables, instr| {
+                        use InstrKind::*;
+                        match &instr.kind {
+                            Identifier(var) | Assignment(var, _) => Some(variables[var].0),
+                            _ => None,
+                        }
+                    });
+                let Some(definition) = definition else {
+                    return self.send_response(id, JsonValue::Null);
+                };
+                let definition = definition as usize;
+                let references = self.project.functions[&pos_fname].find_references(definition);
+                let mut changes = array![];
+                for (start, end) in references {
+                    let range = self.encode_range(&module, start as usize, end as usize);
+                    // log(format!("-> {}", range));
+                    changes.push(object! {"range": range, "newText": new_name.clone()}).unwrap();
+                }
+                // object! {"range": object! { "start": object! {"line": 2, "character": 1}, "end": object! {"line": 2, "character": 2}}, "newText": "aboba"},
+                let mut result = object! { "changes": object! { } };
+                result["changes"].insert(&uri, changes).unwrap();
+                self.send_response(id, result);
+            }
             "shutdown" => {
                 log("We had nothing to do anyway, bye!");
                 self.send_response(id, JsonValue::Null);
@@ -308,6 +359,18 @@ impl State {
                 "end": { "line": line, "character": column + 1 }
             }
         }
+    }
+
+    fn encode_range(&self, module: &str, start: usize, end: usize) -> JsonValue {
+        let source = &self.project.sources[module][..start];
+        let line = source.lines().count() - 1;
+        let column = source.lines().last().unwrap_or("").len();
+        let start = object! { "line": line, "character": column };
+        let source = &self.project.sources[module][..end];
+        let line = source.lines().count() - 1;
+        let column = source.lines().last().unwrap_or("").len();
+        let end = object! { "line": line, "character": column };
+        object! { "start": start, "end": end }
     }
 
     fn send_response(&mut self, id: JsonValue, result: JsonValue) {
