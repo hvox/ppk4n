@@ -82,62 +82,12 @@ impl State {
                         "textDocumentSync": 1,
                         "completionProvider": object! {"completionItem": object! {"labelDetailsSupport": true}},
                         "hoverProvider": true,
+                        "definitionProvider": true,
                     },
                     "serverInfo": object! {
                         "name": "ppkn-lsp",
                         "version": "0.0.1-dev",
                     },
-                };
-                self.send_response(id, result);
-            }
-            "textDocument/hover" => {
-                let uri = params["textDocument"]["uri"].take_string().unwrap();
-                let module = self.resolve_path(uri);
-                let line = params["position"]["line"].as_usize().unwrap();
-                let column = params["position"]["character"].as_usize().unwrap();
-                let position = self.resolve_position(&module, line, column);
-                log(format!(
-                    "{}:{}: {}[{}]{}",
-                    line,
-                    column,
-                    &self.project.sources[&module][position - 5..position],
-                    &self.project.sources[&module][position..position + 1],
-                    &self.project.sources[&module][position + 1..position + 6]
-                ));
-                let mut pos_fname: Rc<str> = "".into();
-                let mut min_dist: usize = usize::MAX;
-                for (fname, f) in &self.project.functions {
-                    let (start, end) = f.span;
-                    if f.module == module && start as usize <= position && position < end as usize {
-                        pos_fname = fname.clone();
-                        min_dist = 0;
-                    } else if f.module == module && start as usize <= position {
-                        let dist = position - end as usize;
-                        if dist < min_dist {
-                            pos_fname = fname.clone();
-                            min_dist = dist;
-                        }
-                    }
-                }
-                let result = if !pos_fname.is_empty() {
-                    use InstrKind::*;
-                    let hover_info = self.project.functions[&pos_fname].at_position(
-                        position,
-                        |variables, instr| match &instr.kind {
-                            Identifier(var) | Assignment(var, _) => {
-								log(var);
-                                format!("{}: {:?}", var, variables[var].1)
-                            }
-                            MethodCall(_, name, _) => format!("fun {}(self, ...)", name),
-                            FnCall(fname, _) => format!("fun {}(...)", fname),
-                            Unreachable => "Unreachable code".to_string(),
-                            NoOp => "Do nothing at all".to_string(),
-                            _ => "Aboba".to_string(),
-                        },
-                    );
-                    object! { "contents": hover_info }
-                } else {
-                    JsonValue::Null
                 };
                 self.send_response(id, result);
             }
@@ -185,6 +135,94 @@ impl State {
                 }
                 log(format!("Send completions: {}", completions));
                 self.send_response(id, completions);
+            }
+            "textDocument/hover" => {
+                let uri = params["textDocument"]["uri"].take_string().unwrap();
+                let module = self.resolve_path(uri);
+                let line = params["position"]["line"].as_usize().unwrap();
+                let column = params["position"]["character"].as_usize().unwrap();
+                let position = self.resolve_position(&module, line, column);
+                log(format!(
+                    "{}:{}: {}[{}]{}",
+                    line,
+                    column,
+                    &self.project.sources[&module][position - 5..position],
+                    &self.project.sources[&module][position..position + 1],
+                    &self.project.sources[&module][position + 1..position + 6]
+                ));
+                let mut pos_fname: Rc<str> = "".into();
+                let mut min_dist: usize = usize::MAX;
+                for (fname, f) in &self.project.functions {
+                    let (start, end) = f.span;
+                    if f.module == module && start as usize <= position && position < end as usize {
+                        pos_fname = fname.clone();
+                        min_dist = 0;
+                    } else if f.module == module && start as usize <= position {
+                        let dist = position - end as usize;
+                        if dist < min_dist {
+                            pos_fname = fname.clone();
+                            min_dist = dist;
+                        }
+                    }
+                }
+                let result = if !pos_fname.is_empty() {
+                    use InstrKind::*;
+                    let hover_info = self.project.functions[&pos_fname].at_position(
+                        position,
+                        |variables, instr| match &instr.kind {
+                            Identifier(var) | Assignment(var, _) => {
+                                format!("{}: {:?}", var, variables[var].1)
+                            }
+                            MethodCall(_, name, _) => format!("fun {}(self, ...)", name),
+                            FnCall(fname, _) => format!("fun {}(...)", fname),
+                            Unreachable => "Unreachable code".to_string(),
+                            NoOp => "Do nothing at all".to_string(),
+                            _ => "Aboba".to_string(),
+                        },
+                    );
+                    object! { "contents": hover_info }
+                } else {
+                    JsonValue::Null
+                };
+                self.send_response(id, result);
+            }
+            "textDocument/definition" => {
+                // log(format!("{}", params));
+                let uri = params["textDocument"]["uri"].take_string().unwrap();
+                let module = self.resolve_path(uri);
+                let line = params["position"]["line"].as_usize().unwrap();
+                let column = params["position"]["character"].as_usize().unwrap();
+                let position = self.resolve_position(&module, line, column);
+                let mut pos_fname: Rc<str> = "".into();
+                let mut min_dist: usize = usize::MAX;
+                for (fname, f) in &self.project.functions {
+                    let (start, end) = f.span;
+                    if f.module == module && start as usize <= position && position < end as usize {
+                        pos_fname = fname.clone();
+                        min_dist = 0;
+                    } else if f.module == module && start as usize <= position {
+                        let dist = position - end as usize;
+                        if dist < min_dist {
+                            pos_fname = fname.clone();
+                            min_dist = dist;
+                        }
+                    }
+                }
+                if pos_fname.is_empty() {
+                    return self.send_response(id, JsonValue::Null);
+                }
+                let definition_location =
+                    self.project.functions[&pos_fname].at_position(position, |variables, instr| {
+                        use InstrKind::*;
+                        match &instr.kind {
+                            Identifier(var) | Assignment(var, _) => variables[var].0 as usize,
+                            FnCall(name, _) => {
+                                self.project.functions[name].body.value.span.0 as usize
+                            }
+                            _ => position,
+                        }
+                    });
+                self.send_response(id, self.encode_position(&module, definition_location));
             }
             "shutdown" => {
                 log("We had nothing to do anyway, bye!");
@@ -251,6 +289,22 @@ impl State {
             }
         }
         position
+    }
+
+    fn encode_position(&self, module: &str, position: usize) -> JsonValue {
+        let source = &self.project.sources[module][..position];
+        let uri =
+            format!("file://{}/{}.ppkn", self.project.root.as_os_str().to_string_lossy(), module);
+        // log(&uri);
+        let line = source.lines().count() - 1;
+        let column = source.lines().last().unwrap_or("").len();
+        object! {
+            "uri": uri,
+            "range": object! {
+                "start": { "line": line, "character": column },
+                "end": { "line": line, "character": column + 1 }
+            }
+        }
     }
 
     fn send_response(&mut self, id: JsonValue, result: JsonValue) {
