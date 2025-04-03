@@ -101,10 +101,19 @@ impl State {
             "initialize" => {
                 // TODO check if field "clientInfo" exists
                 log("Connected to ".to_string() + &params["clientInfo"].to_string());
-                // log(params["capabilities"].stringify().unwrap());
+                // log(format!("{}", params["capabilities"]));
+                let mut encodings = params["capabilities"]["general"]["positionEncodings"].take();
+                log(format!("Supported positon encodings: {}", encodings));
+                // Encoding does not matter because Ppkn LSP currently
+                // does not support non-ASCII characters...
+                let encoding = if encodings.is_array() && !encodings.is_empty() {
+                    encodings[0].take_string().unwrap()
+                } else {
+                    "utf-16".to_string()
+                };
                 let result = object! {
                     "capabilities": object! {
-                        "positionEncoding": "utf-8",
+                        "positionEncoding": encoding,
                         "textDocumentSync": 1,
                         "completionProvider": object! {"completionItem": object! {"labelDetailsSupport": true}},
                         "hoverProvider": true,
@@ -174,14 +183,14 @@ impl State {
                 let line = params["position"]["line"].as_usize().unwrap();
                 let column = params["position"]["character"].as_usize().unwrap();
                 let position = self.resolve_position(&module, line, column);
-                log(format!(
-                    "{}:{}: {}[{}]{}",
-                    line,
-                    column,
-                    &self.project.sources[&module][position - 5..position],
-                    &self.project.sources[&module][position..position + 1],
-                    &self.project.sources[&module][position + 1..position + 6]
-                ));
+                // log(format!(
+                //     "{}:{}: {}[{}]{}",
+                //     line,
+                //     column,
+                //     &self.project.sources[&module][position - 5..position],
+                //     &self.project.sources[&module][position..position + 1],
+                //     &self.project.sources[&module][position + 1..position + 6]
+                // ));
                 let mut pos_fname: Rc<str> = "".into();
                 let mut min_dist: usize = usize::MAX;
                 for (fname, f) in &self.project.functions {
@@ -318,7 +327,12 @@ impl State {
                     let token_type = match token.kind {
                         Comment => "comment",
                         UnterminatedString | String => "string",
-                        Identifier => "variable",
+                        Identifier => match &source[token.position as usize
+                            ..token.position as usize + token.length as usize]
+                        {
+                            "print" | "println" | "malloc" | "free" | "main" => "function",
+                            _ => "variable",
+                        },
                         Integer | Decimal => "number",
                         Use | Let | Mut | And | Class | Else | False | For | Fun | If | Or
                         | Return | Super | This | True | While => "keyword",
