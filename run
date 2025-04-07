@@ -1,0 +1,12 @@
+#!/bin/sh -e
+help_screen="Build and run the Ppkn compiler"
+
+
+if [ $# -lt 1 ]; then
+	script_name=$(basename "$0")
+	printf "%s\n" "$help_screen" | sed "s/{script}/$script_name/g"
+	( [ "$1" = "-h" ] || [ "$1" = "--help" ] ) && exit 0 || exit 1
+fi
+
+sh -c "cd $(dirname "$0"); cargo build --quiet"
+"$(dirname "$0")/target/debug/ppkn" "$@"
