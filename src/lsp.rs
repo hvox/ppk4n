@@ -114,7 +114,7 @@ impl State {
                 let result = object! {
                     "capabilities": object! {
                         "positionEncoding": encoding,
-                        "textDocumentSync": 1,
+                        "textDocumentSync": 2,
                         "completionProvider": object! {"completionItem": object! {"labelDetailsSupport": true}},
                         "hoverProvider": true,
                         "definitionProvider": true,
@@ -135,7 +135,7 @@ impl State {
             "textDocument/completion" => {
                 // log(format!("{}", params));
                 let uri = params["textDocument"]["uri"].take_string().unwrap();
-                let module = self.resolve_path(uri);
+                let module = self.resolve_path(&uri);
                 let line = params["position"]["line"].as_usize().unwrap();
                 let column = params["position"]["character"].as_usize().unwrap();
                 let position = self.resolve_position(&module, line, column);
@@ -179,7 +179,7 @@ impl State {
             }
             "textDocument/hover" => {
                 let uri = params["textDocument"]["uri"].take_string().unwrap();
-                let module = self.resolve_path(uri);
+                let module = self.resolve_path(&uri);
                 let line = params["position"]["line"].as_usize().unwrap();
                 let column = params["position"]["character"].as_usize().unwrap();
                 let position = self.resolve_position(&module, line, column);
@@ -230,7 +230,7 @@ impl State {
             "textDocument/definition" => {
                 // log(format!("{}", params));
                 let uri = params["textDocument"]["uri"].take_string().unwrap();
-                let module = self.resolve_path(uri);
+                let module = self.resolve_path(&uri);
                 let line = params["position"]["line"].as_usize().unwrap();
                 let column = params["position"]["character"].as_usize().unwrap();
                 let position = self.resolve_position(&module, line, column);
@@ -269,7 +269,7 @@ impl State {
                 let new_name = params["newName"].take_string().unwrap();
                 // log(format!("{}", params));
                 let uri = params["textDocument"]["uri"].take_string().unwrap();
-                let module = self.resolve_path(uri.clone());
+                let module = self.resolve_path(&uri);
                 let line = params["position"]["line"].as_usize().unwrap();
                 let column = params["position"]["character"].as_usize().unwrap();
                 let position = self.resolve_position(&module, line, column);
@@ -317,7 +317,7 @@ impl State {
             }
             "textDocument/semanticTokens/full" => {
                 let uri = params["textDocument"]["uri"].take_string().unwrap();
-                let module = self.resolve_path(uri.clone());
+                let module = self.resolve_path(&uri);
                 // TODO: This info should go from AST not from tokens
                 let mut tokens_encoded = vec![];
                 let mut position = 0;
@@ -383,12 +383,25 @@ impl State {
                 let uri: String = params["textDocument"]["uri"].take_string().unwrap();
                 let text: String = params["textDocument"]["text"].take_string().unwrap();
                 log(format!("{}: {}", uri, text.len()));
-                self.update_source(uri, text);
+                self.update_source(&uri, text);
             }
             "textDocument/didChange" => {
+                log(format!("params: {}", params));
                 let uri: String = params["textDocument"]["uri"].take_string().unwrap();
-                let text: String = params["contentChanges"][0]["text"].take_string().unwrap();
-                self.update_source(uri, text);
+                for change in params["contentChanges"].members_mut() {
+                    let text: String = change["text"].take_string().unwrap();
+                    let range = change["range"].take();
+                    if range.is_null() {
+                        self.update_source(&uri, text);
+                    } else {
+                        let module = self.resolve_path(&uri);
+                        let range = self.decode_range(&module, &range);
+                        log(format!("{:?}: {}", range, text));
+                        let mut source = self.project.sources[&module].to_string();
+                        source.replace_range(range.0..range.1, &text);
+                        self.update_source(&uri, source);
+                    }
+                }
             }
             "textDocument/didSave" => {}
             unknown_method => {
@@ -397,7 +410,7 @@ impl State {
         }
     }
 
-    fn update_source(&mut self, uri: String, content: String) {
+    fn update_source(&mut self, uri: &str, content: String) {
         let module = self.resolve_path(uri);
         let sources = std::mem::take(&mut self.project.sources);
         self.project = Program::default();
@@ -411,7 +424,7 @@ impl State {
         // log(format!("{:?}", self.project.functions.keys().collect::<Vec<_>>()))
     }
 
-    fn resolve_path(&mut self, uri: String) -> Rc<str> {
+    fn resolve_path(&mut self, uri: &str) -> Rc<str> {
         let path = uri.strip_prefix("file://").unwrap();
         let module = path.split("/").last().unwrap().split_once(".").unwrap().0;
         module.into()
@@ -462,6 +475,31 @@ impl State {
         let column = source.lines().last().unwrap_or("").len();
         let end = object! { "line": line, "character": column };
         object! { "start": start, "end": end }
+    }
+
+    fn decode_range(&self, module: &str, range: &JsonValue) -> (usize, usize) {
+        let start = self.decode_position(module, &range["start"]);
+        let end = self.decode_position(module, &range["end"]);
+        (start, end)
+    }
+
+    fn decode_position(&self, module: &str, position: &JsonValue) -> usize {
+        let line = position["line"].as_usize().unwrap();
+        let column = position["character"].as_usize().unwrap();
+        let mut y = 0;
+        let mut x = 0;
+        for (i, ch) in self.project.sources[module].char_indices() {
+            if (y, x) == (line, column) {
+                return i;
+            }
+            if ch == '\n' {
+                x = 0;
+                y += 1;
+            } else {
+                x += 1;
+            }
+        }
+        unreachable!()
     }
 
     fn send_response(&mut self, id: JsonValue, result: JsonValue) {
