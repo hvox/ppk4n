@@ -10,6 +10,8 @@ use std::time::Instant;
 use std::usize;
 use json::{array, object, parse, JsonValue};
 
+const SPOONLESS_MODE_TEST: bool = false;
+
 thread_local! {
     static START_TIME: Instant = Instant::now();
 }
@@ -67,11 +69,11 @@ pub fn main() {
         // log(format!("Got {:?}", message));
         match message {
             Message::Request { id, method, params } => {
-                log(format!("Got request \"{}\"", method));
+                log(format!("Got request \"{}\" id={}", method, id));
                 state.process_request(id, method, params);
             }
-            Message::Response { id: _, result } => {
-                log(format!("Got response {:?}", result));
+            Message::Response { id, result } => {
+                log(format!("Got response {} id={}", result, id));
             }
             Message::Notification { method, params } => {
                 log(format!("Got notification \"{}\"", method));
@@ -93,6 +95,100 @@ pub fn main() {
 struct State {
     project: Program,
     queue: VecDeque<Message>,
+    source: SpoonlessText,
+}
+
+// There is no text, Neo
+#[derive(Default)]
+struct SpoonlessText {
+    // It should have been LinkedList, but Rust currently
+    // does not have working LinkedList in its std.    :(
+    groups: Vec<Vec<String>>,
+    current_line: usize,
+    current_group: usize,
+}
+
+impl SpoonlessText {
+    fn from(text: &str) -> Self {
+        let mut groups = Vec::new();
+        for line in text.lines() {
+            let line = line.to_string();
+            if !line.is_empty() && !line.starts_with("\t") || groups.is_empty() {
+                groups.push(vec![line]);
+            } else {
+                groups.last_mut().unwrap().push(line);
+            }
+        }
+        Self { groups, current_line: 0, current_group: 0 }
+    }
+
+    fn to_string(&self) -> String {
+        let mut text = String::new();
+        for (group_idx, group) in self.groups.iter().enumerate() {
+            for (line_idx, line) in group.iter().enumerate() {
+                text.push_str(&format!(
+                    "{}:{:<2} {}\n",
+                    group_idx,
+                    line_idx,
+                    line.replace("\t", "    "),
+                ));
+            }
+        }
+        text
+    }
+
+    fn replace_range(&mut self, start: (usize, usize), end: (usize, usize), text: &str) {
+        let (y0, x0) = start;
+        let (y1, x1) = end;
+        while self.group_last_line() < y0 {
+            self.goto_next_group();
+        }
+        while self.current_line >= y1 {
+            self.goto_prev_group();
+        }
+        let y0 = y0 - self.current_line;
+        let y1 = y1 - self.current_line;
+        if y0 == y1 {
+            let group = &mut self.groups[self.current_group];
+            if text.contains("\n") {
+                let mut lines: Vec<_> = text.lines().map(|s| s.to_string()).collect();
+                lines[0] = group[y0][0..x0].to_string() + &lines[0];
+                lines.last_mut().unwrap().push_str(&group[y1][x1..]);
+                // group.replace_range(y0..=y1, lines);
+                group.splice(y0..=y1, lines);
+            } else {
+                group[y0].replace_range(x0..x1, text);
+            }
+        } else {
+            for y in y0..=y1 {
+                self.groups[self.current_group][y].replace_range(0..0, &"ERROR-".repeat(10));
+            }
+        }
+    }
+
+    fn goto_prev_group(&mut self) {
+        self.current_group -= 1;
+        self.current_line -= self.groups[self.current_group].len();
+    }
+
+    fn goto_next_group(&mut self) {
+        self.current_line += self.groups[self.current_group].len();
+        self.current_group += 1;
+    }
+
+    fn group_len(&self) -> usize {
+        self.groups[self.current_group].len()
+    }
+
+    fn group_last_line(&self) -> usize {
+        self.current_line + self.group_len()
+    }
+
+    fn log(&self) {
+        if SPOONLESS_MODE_TEST {
+            std::fs::write("spoonless.txt", &self.to_string()).unwrap();
+        }
+    }
 }
 
 impl State {
@@ -122,7 +218,7 @@ impl State {
                         "semanticTokensProvider": object! {"legend": object! {
                             "tokenTypes": TOKEN_TYPES,
                             "tokenModifiers": array![],
-                        }, "full": true },
+                        }, "full": true, "range": false },
                     },
                     "serverInfo": object! {
                         "name": "ppkn-lsp",
@@ -174,7 +270,7 @@ impl State {
                         completions.push(item).unwrap();
                     }
                 }
-                log(format!("Send completions: {}", completions));
+                // log(format!("Send completions: {}", completions));
                 self.send_response(id, completions);
             }
             "textDocument/hover" => {
@@ -365,6 +461,13 @@ impl State {
                 }
                 self.send_response(id, object! {"data": tokens_encoded});
             }
+            "textDocument/semanticTokens/range" => {
+                let uri = params["textDocument"]["uri"].take_string().unwrap();
+                let module = self.resolve_path(&uri);
+                log(format!("range: {}", params));
+                self.send_response(id, object! { "data": [0, 0, 5, 8, 0] });
+                _ = module;
+            }
             "shutdown" => {
                 log("We had nothing to do anyway, bye!");
                 self.project = Default::default();
@@ -383,10 +486,11 @@ impl State {
                 let uri: String = params["textDocument"]["uri"].take_string().unwrap();
                 let text: String = params["textDocument"]["text"].take_string().unwrap();
                 log(format!("{}: {}", uri, text.len()));
+                self.source = SpoonlessText::from(&text);
                 self.update_source(&uri, text);
+                self.source.log();
             }
             "textDocument/didChange" => {
-                log(format!("params: {}", params));
                 let uri: String = params["textDocument"]["uri"].take_string().unwrap();
                 for change in params["contentChanges"].members_mut() {
                     let text: String = change["text"].take_string().unwrap();
@@ -394,9 +498,19 @@ impl State {
                     if range.is_null() {
                         self.update_source(&uri, text);
                     } else {
+                        let start = (
+                            range["start"]["line"].as_usize().unwrap(),
+                            range["start"]["character"].as_usize().unwrap(),
+                        );
+                        let end = (
+                            range["end"]["line"].as_usize().unwrap(),
+                            range["end"]["character"].as_usize().unwrap(),
+                        );
+                        self.source.replace_range(start, end, &text);
+                        self.source.log();
+
                         let module = self.resolve_path(&uri);
                         let range = self.decode_range(&module, &range);
-                        log(format!("{:?}: {}", range, text));
                         let mut source = self.project.sources[&module].to_string();
                         source.replace_range(range.0..range.1, &text);
                         self.update_source(&uri, source);
@@ -417,7 +531,8 @@ impl State {
         self.project.sources = sources;
         self.project.sources.insert(module.clone(), content.into());
         if let Err(errors) = self.project.load_and_typecheck(module) {
-            log(format!("{:?}", errors));
+            // log(format!("{:?}", errors));
+            _ = errors;
         } else {
             // log("updated");
         }
