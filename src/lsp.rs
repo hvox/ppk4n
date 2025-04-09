@@ -43,12 +43,8 @@ static TOKEN_TYPES: &[&str] = &[
 ];
 
 pub fn get_log_path() -> Option<PathBuf> {
-    // Documentation of `home` crate states that `home_dir()`
-    // is absolutely safe starting from Rust 1.85 but still
-    // has irrelevant deprecation warning.
-    let log_path = ".local/state/ppkn/lsp.log";
-    #[allow(deprecated)]
-    std::env::home_dir().map(|path| path.join(log_path))
+    let log_dir = dirs::state_dir().or_else(|| dirs::data_local_dir());
+    log_dir.map(|path| path.join("ppkn/lsp.log"))
 }
 
 pub fn main() {

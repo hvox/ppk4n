@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+dirs = "6.0.0"
 indexmap = "2.7.0"
 json = "0.12.4"
 ordered-float = "4.6.0"
