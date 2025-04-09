@@ -5,6 +5,7 @@ use super::ppkn::lexer::*;
 use std::collections::VecDeque;
 use std::fs::OpenOptions;
 use std::io::{stdin, stdout, Read, Write};
+use std::path::PathBuf;
 use std::rc::Rc;
 use std::time::Instant;
 use std::usize;
@@ -41,8 +42,23 @@ static TOKEN_TYPES: &[&str] = &[
     "operator",
 ];
 
+pub fn get_log_path() -> Option<PathBuf> {
+    // Documentation of `home` crate states that `home_dir()`
+    // is absolutely safe starting from Rust 1.85 but still
+    // has irrelevant deprecation warning.
+    let log_path = ".local/state/ppkn/lsp.log";
+    #[allow(deprecated)]
+    std::env::home_dir().map(|path| path.join(log_path))
+}
+
 pub fn main() {
-    std::fs::write("lsp.log", "").unwrap();
+    if let Some(log_path) = get_log_path() {
+        if let Some(parent) = log_path.parent() {
+            println!("{:?}", parent);
+            std::fs::create_dir_all(parent).unwrap();
+        }
+        std::fs::write(log_path, "").unwrap();
+    }
     let default_panic = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
         log(format!("{}", info));
@@ -674,10 +690,9 @@ fn find(haystack: &[u8], needle: &[u8]) -> Option<usize> {
 }
 
 fn log(message: impl AsRef<str>) {
+    let Some(log_path) = get_log_path() else { return };
     // TODO: figure out how to print time without chrono
     let time = START_TIME.with(|time| time.elapsed().as_micros());
-    let Ok(mut file) = OpenOptions::new().append(true).open("lsp.log") else {
-        return;
-    };
+    let Ok(mut file) = OpenOptions::new().append(true).open(log_path) else { return };
     _ = writeln!(file, "{:>3}: {}", time, message.as_ref());
 }
