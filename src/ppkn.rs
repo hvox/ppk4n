@@ -7,3 +7,8 @@ pub mod parser;
 pub mod runtime;
 pub mod transpiler;
 pub mod wasm;
+
+pub mod streaming_lexer;
+pub mod streaming_parser;
+pub mod mir;
+mod common;
