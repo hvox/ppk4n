@@ -11,4 +11,6 @@ pub mod wasm;
 pub mod streaming_lexer;
 pub mod streaming_parser;
 pub mod mir;
+pub mod mir_typechecker;
+pub mod mir_name_resolution;
 mod common;
