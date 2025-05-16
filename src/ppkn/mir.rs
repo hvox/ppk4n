@@ -117,11 +117,9 @@ pub enum InstrKind {
     String(Str),
     Integer(Str),
     Boolean(bool),
-    Identifier(Str),
-    Global(Str, Handle<Global>),
     Tuple(Vec<Expr>),
-    Assignment(Str, Box<Expr>),
-    AssignmentGlobal(Str, Handle<Global>, Box<Expr>),
+    Identifier(Str, Option<Handle<Global>>),
+    Assignment(Str, Option<Handle<Global>>, Box<Expr>),
     Block(Box<Block>),
     While(Box<(Expr, Expr)>),
     If(Box<(Expr, Expr, Expr)>),
@@ -136,7 +134,7 @@ pub enum InstrKind {
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Block {
     pub stmts: Vec<Stmt>,
-    pub result: Expr,
+    pub result: Option<Expr>,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -266,6 +264,10 @@ impl Types {
         self.handles.push(Cell::new(id));
         self.types.insert(id, typ);
         TypeId(id)
+    }
+
+    pub fn unknown(&mut self) -> TypeId {
+        self.insert(InferredType::Unknown)
     }
 
     pub fn unify(&mut self, u: TypeId, v: TypeId) -> Result<(), (InferredType, InferredType)> {

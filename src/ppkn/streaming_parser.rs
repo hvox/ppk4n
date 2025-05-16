@@ -144,14 +144,14 @@ impl<'p, 'l, L: Iterator<Item = &'l str>> Parser<'p, 'l, L> {
         use TokenKind::*;
         let token = self.tokens.peek();
         let mut span = token.span();
-        let mut stmts: Vec<Stmt> = vec![];
         if token.kind != Indent {
             self.error(span, "expected block of code");
-            return (span, Block { stmts, result: Expr::noop(span) });
+            return (span, Block { stmts: Vec::new(), result: None });
         } else {
             self.tokens.skip();
             self.tokens.skip_while(|tok| tok.kind == Linend);
         }
+        let mut stmts: Vec<Stmt> = vec![];
         while self.tokens.peek().kind != Dedent {
             let target = match self.tokens.peek().kind {
                 Let | Mut => {
@@ -174,7 +174,12 @@ impl<'p, 'l, L: Iterator<Item = &'l str>> Parser<'p, 'l, L> {
             stmts.push(stmt);
             self.tokens.skip_while(|tok| tok.kind == Linend);
         }
-        (span, Block { stmts, result: Expr::noop(span) })
+        let result = if stmts.last().is_some_and(|x| x.target.is_none()) {
+            Some(stmts.pop().unwrap().value)
+        } else {
+            None
+        };
+        (span, Block { stmts, result })
     }
 
     fn parse_expression(&mut self) -> Expr {
@@ -275,7 +280,7 @@ impl<'p, 'l, L: Iterator<Item = &'l str>> Parser<'p, 'l, L> {
             }
             TokenKind::Identifier => {
                 self.tokens.skip();
-                Identifier(Str::from(self.tokens.literal()))
+                Identifier(Str::from(self.tokens.literal()), None)
             }
             TokenKind::String => {
                 self.tokens.skip();
