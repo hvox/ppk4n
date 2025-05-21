@@ -252,9 +252,10 @@ impl<'p, 'l, L: Iterator<Item = &'l str>> Parser<'p, 'l, L> {
                     typ: VOID,
                     kind: InstrKind::Call(Box::new(FnCall {
                         has_receiver: true,
-                        name: op_name.into(),
+                        fname_span: op.span(),
+                        func: op_name.into(),
                         args: vec![x, y],
-                        hndl: Handle::default(),
+                        hndl: None,
                     })),
                 };
                 args.push(op_result);
@@ -275,16 +276,40 @@ impl<'p, 'l, L: Iterator<Item = &'l str>> Parser<'p, 'l, L> {
                 Boolean(boolean == TokenKind::True)
             }
             TokenKind::Integer => {
+                let digits = Str::from(self.tokens.literal());
                 self.tokens.skip();
-                Integer(Str::from(self.tokens.literal()))
+                Integer(digits)
             }
             TokenKind::Identifier => {
+                let name = Str::from(self.tokens.literal());
                 self.tokens.skip();
-                Identifier(Str::from(self.tokens.literal()), None)
+                let next_token = self.tokens.peek();
+                if next_token.kind == TokenKind::LeftParen
+                    && end.span().end == next_token.span().start
+                {
+                    self.tokens.skip();
+                    let mut arguments = vec![self.parse_expression()];
+                    while self.tokens.peek().kind == TokenKind::Comma {
+                        self.tokens.skip();
+                        arguments.push(self.parse_expression());
+                    }
+                    end = self.tokens.peek();
+                    self.parse_token(TokenKind::RightParen);
+                    Call(Box::new(FnCall {
+                        has_receiver: false,
+                        fname_span: start.span(),
+                        func: name,
+                        args: arguments,
+                        hndl: None,
+                    }))
+                } else {
+                    Identifier(name, None)
+                }
             }
             TokenKind::String => {
+                let string = Str::from(self.tokens.literal());
                 self.tokens.skip();
-                String(Str::from(self.tokens.literal()))
+                String(string)
             }
             _ => {
                 let span = start.span();

@@ -16,6 +16,7 @@ pub struct Program {
     pub imports: Storage<FunctionImport>,
     pub functions: Storage<Function>,
     pub globals: Storage<Global>,
+    pub structs: Storage<Struct>,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Default)]
@@ -24,6 +25,12 @@ pub struct Module {
     pub dependents: HashSet<Str>,
     pub errors: Vec<Error>,
     pub resolved_names: HashMap<Str, Definition>,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone)]
+pub struct Struct {
+    pub name: Str,
+    pub methods: HashMap<Str, Handle<Function>>,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -153,9 +160,10 @@ pub struct VarDef {
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct FnCall {
     pub has_receiver: bool,
-    pub name: Str,
+    pub fname_span: Span,
+    pub func: Str,
     pub args: Vec<Expr>,
-    pub hndl: Handle<Function>,
+    pub hndl: Option<Handle<Function>>,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -309,6 +317,10 @@ impl Types {
         Ok(())
     }
 
+    pub fn get_type(&self, id: TypeId) -> &InferredType {
+        &self.types[&self.get_handle(id)]
+    }
+
     fn get_handle(&self, id: TypeId) -> u32 {
         debug_assert!(!self.types.is_empty());
         let id = id.0 as usize;
@@ -325,6 +337,11 @@ impl Types {
 // 	#[allow(non_upper_case_globals)]
 // 	pub const Unit: Type = Type::Tuple(Vec::new());
 // }
+
+impl InferredType {
+    #[allow(non_upper_case_globals)]
+    pub const Void: InferredType = InferredType::Tuple(Vec::new());
+}
 
 impl TypeId {
     const fn as_u32(self) -> u32 {
