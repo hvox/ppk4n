@@ -146,27 +146,30 @@ impl<'p> TypecheckerCtx<'p> {
             Call(call) if call.has_receiver => {
                 let receiver = self.types.unknown();
                 self.typecheck_expr(&mut call.args[0], receiver);
-                // if let Some(class) = self.resolve_typename(typ) {
-                //	todo!();
-                // } else {
-                // }
                 if let Some((params, result)) = self.resolve_method(receiver, &call.func) {
-                    // TODO: More friendly error messages
-                    // for wrong number of arguments or
-                    // invalid individual argumnt type
-                    let mut args = Vec::with_capacity(params.len() + 1);
-                    args.push(receiver);
-                    for arg in &mut call.args[1..] {
-                        let typ = self.types.unknown();
+                    for (arg, &typ) in call.args.iter_mut().zip(&params).skip(1) {
                         self.typecheck_expr(arg, typ);
-                        args.push(typ);
                     }
-                    if args.len() != params.len() {
-                        self.type_error(expr.span, "wrong number of arguments");
-                    }
-                    for (arg, param) in args.iter().zip(params) {
-                        // TODO: fix span
-                        self.unify_types_or_cast(expr.span, param, *arg);
+                    if call.args.len() > params.len() {
+                        let start = call.args[params.len()].span.start;
+                        let end = call.args.last().unwrap().span.end;
+                        let error = format!(
+                            "expected only {} arguments but got {}",
+                            params.len() - 1,
+                            call.args.len() - 1
+                        );
+                        self.type_error(Span::new(start, end), error);
+                        for arg in &mut call.args[params.len()..] {
+                            let typ = self.types.unknown();
+                            self.typecheck_expr(arg, typ);
+                        }
+                    } else if call.args.len() < params.len() {
+                        let error = format!(
+                            "method takes {} arguments but got only {}",
+                            call.args.len() - 1,
+                            params.len() - 1,
+                        );
+                        self.type_error(call.fname_span, error);
                     }
                     result
                 } else {
@@ -220,17 +223,21 @@ impl<'p> TypecheckerCtx<'p> {
                         let typ = self.types.unknown();
                         self.typecheck_expr(arg, typ);
                     }
-                    expected_type
+                    return;
                 }
             }
             Return(expr) => {
                 let result = self.types.insert_concrete(&self.result);
                 return self.typecheck_expr(expr, result);
             }
+            Drop(inner_expr) => {
+                *expr = std::mem::replace(&mut **inner_expr, Expr::empty());
+                return self.typecheck_expr(expr, expected_type);
+            }
             Unreachable => return,
             NoOp => VOID,
         };
-        self.unify_types_or_cast(expr.span, expected_type, actual_type);
+        self.set_expr_type(expr, actual_type);
     }
 
     fn typecheck_block(&mut self, block: &mut Block, expected_type: TypeId) {
@@ -245,16 +252,10 @@ impl<'p> TypecheckerCtx<'p> {
                 self.locals.push((target.name.clone(), typ));
                 self.typecheck_expr(&mut stmt.value, typ);
             } else {
-                let typ = self.types.insert(InferredType::Unknown);
-                self.typecheck_expr(&mut stmt.value, typ);
+                self.typecheck_expr(&mut stmt.value, VOID);
             }
         }
-        if let Some(result) = &mut block.result {
-            self.typecheck_expr(result, expected_type);
-        } else if expected_type != VOID {
-            // TODO: Use span of whole statement instead of last expression
-            self.unify_types_or_cast(block.stmts.last().unwrap().value.span, expected_type, VOID);
-        }
+        self.typecheck_expr(&mut block.result, expected_type);
         self.locals.truncate(outer_scope_size);
     }
 
@@ -341,6 +342,21 @@ impl<'p> TypecheckerCtx<'p> {
             kind: ErrorKind::Name,
         });
         (InstrKind::Identifier(name.into(), None), self.types.insert(InferredType::Unknown))
+    }
+
+    fn set_expr_type(&mut self, expr: &mut Expr, actual_type: TypeId) {
+        let Err((dst, src)) = self.types.unify(expr.typ, actual_type) else { return };
+        if dst == InferredType::Void {
+            let mut inner_expr = std::mem::replace(expr, Expr::noop(expr.span));
+            inner_expr.typ = actual_type;
+            expr.kind = InstrKind::Drop(Box::new(inner_expr));
+        } else {
+            self.errors.push(Error {
+                message: format!("expected {:?}, but found {:?}", dst, src).into(),
+                kind: ErrorKind::Type,
+                cause: expr.span,
+            });
+        }
     }
 
     fn unify_types_or_cast(&mut self, span: Span, expected: TypeId, actual: TypeId) {

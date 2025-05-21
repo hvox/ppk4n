@@ -134,6 +134,7 @@ pub enum InstrKind {
     // FunctionCall(Handle<Function>, Str, Vec<Instr>),
     Call(Box<FnCall>),
     Return(Box<Expr>),
+    Drop(Box<Expr>),
     Unreachable,
     NoOp,
 }
@@ -141,13 +142,14 @@ pub enum InstrKind {
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Block {
     pub stmts: Vec<Stmt>,
-    pub result: Option<Expr>,
+    pub result: Expr,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub struct Stmt {
     pub target: Option<VarDef>,
     pub value: Expr,
+    pub span: Span,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]

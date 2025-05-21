@@ -146,13 +146,14 @@ impl<'p, 'l, L: Iterator<Item = &'l str>> Parser<'p, 'l, L> {
         let mut span = token.span();
         if token.kind != Indent {
             self.error(span, "expected block of code");
-            return (span, Block { stmts: Vec::new(), result: None });
+            return (span, Block { stmts: Vec::new(), result: Expr::noop(span) });
         } else {
             self.tokens.skip();
             self.tokens.skip_while(|tok| tok.kind == Linend);
         }
         let mut stmts: Vec<Stmt> = vec![];
         while self.tokens.peek().kind != Dedent {
+            let start = self.tokens.peek().span().start;
             let target = match self.tokens.peek().kind {
                 Let | Mut => {
                     let mutable = self.tokens.next().kind == Mut;
@@ -169,15 +170,17 @@ impl<'p, 'l, L: Iterator<Item = &'l str>> Parser<'p, 'l, L> {
                 }
                 _ => None,
             };
-            let stmt = Stmt { target, value: self.parse_expression() };
+            let value = self.parse_expression();
+            let span = Span::new(start, value.span.end);
+            let stmt = Stmt { target, value, span };
             self.parse_end_of_line();
             stmts.push(stmt);
             self.tokens.skip_while(|tok| tok.kind == Linend);
         }
         let result = if stmts.last().is_some_and(|x| x.target.is_none()) {
-            Some(stmts.pop().unwrap().value)
+            stmts.pop().unwrap().value
         } else {
-            None
+            Expr::noop(stmts.last().unwrap().span)
         };
         (span, Block { stmts, result })
     }
