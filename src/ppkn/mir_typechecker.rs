@@ -359,30 +359,6 @@ impl<'p> TypecheckerCtx<'p> {
         }
     }
 
-    fn unify_types_or_cast(&mut self, span: Span, expected: TypeId, actual: TypeId) {
-        let Err((dst, src)) = self.types.unify(expected, actual) else {
-            return;
-        };
-        if dst != InferredType::Void {
-            self.errors.push(Error {
-                message: format!("expected {:?}, found {:?}", dst, src).into(),
-                kind: ErrorKind::Type,
-                cause: span,
-            });
-        }
-    }
-
-    fn unify(&mut self, span: Span, expected: TypeId, actual: TypeId) {
-        let Err((dst, src)) = self.types.unify(expected, actual) else {
-            return;
-        };
-        self.errors.push(Error {
-            message: format!("expected {:?}, found {:?}", dst, src).into(),
-            kind: ErrorKind::Type,
-            cause: span,
-        });
-    }
-
     fn type_error(&mut self, span: Span, message: impl Into<Cow<'static, str>>) {
         self.errors.push(Error { cause: span, message: message.into(), kind: ErrorKind::Type });
     }
