@@ -13,4 +13,7 @@ pub mod streaming_parser;
 pub mod mir;
 pub mod mir_typechecker;
 pub mod mir_name_resolution;
+pub mod mir_compiler;
+
+pub mod bytecode;
 mod common;

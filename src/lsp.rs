@@ -50,7 +50,6 @@ pub fn get_log_path() -> Option<PathBuf> {
 pub fn main() {
     if let Some(log_path) = get_log_path() {
         if let Some(parent) = log_path.parent() {
-            println!("{:?}", parent);
             std::fs::create_dir_all(parent).unwrap();
         }
         std::fs::write(log_path, "").unwrap();
